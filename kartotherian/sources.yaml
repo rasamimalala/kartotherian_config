@@ -19,6 +19,8 @@ oz:
   uri: overzoom://
   params:
     source: {ref: v2}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=3600, s-maxage=3600'
 
 # Final raster source
 osm-intl:  # This name is the default Kartotherian leaflet test app layer name
@@ -55,3 +57,5 @@ oz-lite:
   uri: overzoom://
   params:
     source: {ref: v2-lite}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=3600, s-maxage=3600'
