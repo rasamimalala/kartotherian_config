@@ -12,6 +12,7 @@ v2:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    setLastModified: true
 
 oz:
   public: true
@@ -19,6 +20,8 @@ oz:
   uri: overzoom://
   params:
     source: {ref: v2}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=3600, s-maxage=3600'
 
 # Final raster source
 osm-intl:  # This name is the default Kartotherian leaflet test app layer name
@@ -48,6 +51,7 @@ v2-lite:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    setLastModified: true
 
 oz-lite:
   public: true
@@ -55,3 +59,5 @@ oz-lite:
   uri: overzoom://
   params:
     source: {ref: v2-lite}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=3600, s-maxage=3600'
