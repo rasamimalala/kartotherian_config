@@ -117,3 +117,63 @@ oz-lite:
   uri: overzoom://
   params:
     source: {ref: dyn-lite}
+
+gen_wopoi:
+  public: true
+  formats: [pbf]
+  uri: bridge://
+  xml: "/etc/tilerator/data_tm2source_wopoi.xml"
+  xmlSetDataSource:
+    if:
+      dbname: gis
+      host: 'localhost'
+      type: postgis
+    set:
+      host: postgres
+      user: {var: osmdb-user}
+      password: {var: osmdb-pswd}
+
+wopoi:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 15
+    keyspace: wopoi
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+gen_wipoi:
+  public: true
+  formats: [pbf]
+  uri: bridge://
+  xml: "/etc/tilerator/data_tm2source_wipoi.xml"
+  xmlSetDataSource:
+    if:
+      dbname: gis
+      host: 'localhost'
+      type: postgis
+    set:
+      host: postgres
+      user: {var: osmdb-user}
+      password: {var: osmdb-pswd}
+
+wipoi:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 15
+    keyspace: wipoi
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+

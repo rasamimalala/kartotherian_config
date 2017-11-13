@@ -61,3 +61,46 @@ oz-lite:
     source: {ref: v2-lite}
   defaultHeaders:
     Cache-Control: 'public, max-age=3600, s-maxage=3600'
+
+wopoi:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 14 # Note: this max zoom is inclusive
+    keyspace: wopoi
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+ozwopoi:
+  public: true
+  formats: [pbf]
+  uri: overzoom://
+  params:
+    source: {ref: wopoi}
+
+
+wipoi:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 14 # Note: this max zoom is inclusive
+    keyspace: wipoi
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+ozwipoi:
+  public: true
+  formats: [pbf]
+  uri: overzoom://
+  params:
+    source: {ref: wipoi}
