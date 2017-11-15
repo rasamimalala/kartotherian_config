@@ -1333,7 +1333,7 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
     ORDER BY z_order ASC;
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer building'; END$$;-- etldoc: layer_building[shape=record fillcolor=lightpink, style="rounded,filled",
--- etldoc:     label="layer_building | <z13> z13 | <z14_> z14+ " ] ;
+-- etldoc:     label="layer_building | <z14_> z14+ " ] ;
 
 CREATE OR REPLACE FUNCTION as_numeric(text) RETURNS NUMERIC AS $$
  -- Inspired by http://stackoverflow.com/questions/16195986/isnumeric-with-postgresql/16206123#16206123
@@ -1409,13 +1409,6 @@ CREATE OR REPLACE FUNCTION layer_building(bbox geometry, zoom_level int)
 RETURNS TABLE(geometry geometry, osm_id bigint, render_height int, render_min_height int) AS $$
     SELECT geometry, osm_id, render_height, render_min_height
     FROM (
-        -- etldoc: osm_building_polygon_gen1 -> layer_building:z13
-        SELECT
-            osm_id, geometry,
-            NULL::int AS render_height, NULL::int AS render_min_height
-        FROM osm_building_polygon_gen1
-        WHERE zoom_level = 13 AND geometry && bbox
-        UNION ALL
         -- etldoc: osm_building_polygon -> layer_building:z14_
         SELECT DISTINCT ON (osm_id)
            osm_id, geometry,
@@ -2546,13 +2539,13 @@ CREATE CONSTRAINT TRIGGER trigger_refresh
     EXECUTE PROCEDURE housenumber.refresh();
 
 -- etldoc: layer_housenumber[shape=record fillcolor=lightpink, style="rounded,filled",
--- etldoc:     label="layer_housenumber | <z15_> z15+" ] ;
+-- etldoc:     label="layer_housenumber | <z14_> z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_housenumber(bbox geometry, zoom_level integer)
 RETURNS TABLE(osm_id bigint, geometry geometry, housenumber text) AS $$
-   -- etldoc: osm_housenumber_point -> layer_housenumber:z15_
+   -- etldoc: osm_housenumber_point -> layer_housenumber:z14_
     SELECT osm_id, geometry, housenumber FROM osm_housenumber_point
-    WHERE zoom_level >= 15 AND geometry && bbox;
+    WHERE zoom_level >= 14 AND geometry && bbox;
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer poi'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_poi_polygon;
 DROP TRIGGER IF EXISTS trigger_refresh ON poi_polygon.updates;
