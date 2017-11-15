@@ -10,8 +10,6 @@ generalized_tables:
   boundary_linestring_gen3: {source: boundary_linestring, tolerance: 76.43702828517628}
   boundary_linestring_gen4: {source: boundary_linestring, tolerance: 152.87405657035256}
   boundary_linestring_gen5: {source: boundary_linestring, tolerance: 305.74811314070513}
-  building_polygon_gen1: {source: building_polygon, sql_filter: 'area>power(38.2185141426,2)',
-    tolerance: 9.554628535647035}
   highway_linestring_gen1: {source: highway_linestring, sql_filter: 'highway IN (''motorway'',
       ''trunk'', ''primary'', ''secondary'', ''tertiary'', ''motorway_link'', ''trunk_link'',
       ''primary_link'', ''secondary_link'', ''tertiary_link'') AND NOT is_area', tolerance: 38.21851414258814}
