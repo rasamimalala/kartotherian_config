@@ -118,11 +118,11 @@ oz-lite:
   params:
     source: {ref: dyn-lite}
 
-gen_wopoi:
+gen_basemap:
   public: true
   formats: [pbf]
   uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_wopoi.xml"
+  xml: "/etc/tilerator/data_tm2source_basemap.xml"
   xmlSetDataSource:
     if:
       dbname: gis
@@ -133,13 +133,13 @@ gen_wopoi:
       user: {var: osmdb-user}
       password: {var: osmdb-pswd}
 
-wopoi:
+basemap:
   public: true
   formats: [pbf]
   uri: cassandra://
   params:
     maxzoom: 15
-    keyspace: wopoi
+    keyspace: basemap
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
     password: {var: cassandra-pswd}
@@ -147,11 +147,11 @@ wopoi:
     durablewrite: 0
     createIfMissing: true
 
-gen_wipoi:
+gen_poi:
   public: true
   formats: [pbf]
   uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_wipoi.xml"
+  xml: "/etc/tilerator/data_tm2source_poi.xml"
   xmlSetDataSource:
     if:
       dbname: gis
@@ -162,13 +162,13 @@ gen_wipoi:
       user: {var: osmdb-user}
       password: {var: osmdb-pswd}
 
-wipoi:
+poi:
   public: true
   formats: [pbf]
   uri: cassandra://
   params:
     maxzoom: 15
-    keyspace: wipoi
+    keyspace: poi
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
     password: {var: cassandra-pswd}
