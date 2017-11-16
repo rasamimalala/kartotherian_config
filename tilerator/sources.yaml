@@ -135,6 +135,7 @@ poi:
   uri: cassandra://
   params:
     maxzoom: 15
+    minzoom: 10
     keyspace: poi
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}

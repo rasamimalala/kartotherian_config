@@ -66,6 +66,7 @@ poi:
   uri: cassandra://
   params:
     maxzoom: 14 # Note: this max zoom is inclusive
+    minzoom: 10 # Note: this max zoom is inclusive
     keyspace: poi
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
