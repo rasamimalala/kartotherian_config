@@ -1,28 +1,5 @@
 # Tiles storage
-v2:
-  public: true
-  formats: [pbf]
-  uri: cassandra://
-  params:
-    maxzoom: 15 # Note: this max zoom is inclusive
-    keyspace: v2
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
-    repfactor: 4
-    durablewrite: 0
-    createIfMissing: true
-    setLastModified: true
-
-oz:
-  public: true
-  formats: [pbf]
-  uri: overzoom://
-  params:
-    source: {ref: v2}
-  defaultHeaders:
-    Cache-Control: 'public, max-age=3600, s-maxage=3600'
-
+#
 # Final raster source
 osm-intl:  # This name is the default Kartotherian leaflet test app layer name
   public: true
@@ -61,3 +38,46 @@ oz-lite:
     source: {ref: v2-lite}
   defaultHeaders:
     Cache-Control: 'public, max-age=3600, s-maxage=3600'
+
+basemap:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 14 # Note: this max zoom is inclusive
+    keyspace: basemap
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+ozbasemap:
+  public: true
+  formats: [pbf]
+  uri: overzoom://
+  params:
+    source: {ref: basemap}
+
+poi:
+  public: true
+  formats: [pbf]
+  uri: cassandra://
+  params:
+    maxzoom: 14 # Note: this max zoom is inclusive
+    minzoom: 10 # Note: this max zoom is inclusive
+    keyspace: poi
+    cp: {var: cassandra-servers}
+    username: {var: cassandra-user}
+    password: {var: cassandra-pswd}
+    repfactor: 4
+    durablewrite: 0
+    createIfMissing: true
+
+ozpoi:
+  public: true
+  formats: [pbf]
+  uri: overzoom://
+  params:
+    source: {ref: poi}
