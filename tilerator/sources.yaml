@@ -90,7 +90,7 @@ substbasemap:  # only for basemap
   formats: [pbf]
   uri: substantial://
   params:
-    source: {ref: basemap}
+    source: {ref: gen_basemap}
     minzoom: 10
     maxsize: 100
     layers: [water, landuse, landcover]
@@ -142,16 +142,6 @@ poi:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
-
-substpoi:  # only for POIs
-  public: true
-  formats: [pbf]
-  uri: substantial://
-  params:
-    source: {ref: poi}
-    minzoom: 10
-    maxsize: 100
-    layers: [water, landuse, landcover]
 
 ozpoi:
   public: true
