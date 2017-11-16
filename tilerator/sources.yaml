@@ -85,7 +85,7 @@ basemap:
     durablewrite: 0
     createIfMissing: true
 
-substbasemap:  # que pour les pas pois
+substbasemap:  # only for basemap
   public: true
   formats: [pbf]
   uri: substantial://
@@ -143,7 +143,7 @@ poi:
     durablewrite: 0
     createIfMissing: true
 
-substpoi:  # que pour les pas pois
+substpoi:  # only for POIs
   public: true
   formats: [pbf]
   uri: substantial://
@@ -153,22 +153,10 @@ substpoi:  # que pour les pas pois
     maxsize: 100
     layers: [water, landuse, landcover]
 
-ozpoi: # faut tester 
+ozpoi:
   public: true
   formats: [pbf]
   uri: overzoom://
   params:
     source: {ref: poi}
-
-dynpoi:
-  uri: autogen://
-  params:
-    storage: {ref: poi}
-    generator: {ref: ozpoi}
-    # Optional:
-    mingen: 10  # Only generate tiles if missing within this zoom range
-    maxgen: 15
-    minstore: 10  # if generated, only store them if within this zoom range 
-    maxstore: 15
-
 
