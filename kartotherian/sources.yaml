@@ -37,7 +37,7 @@ oz-lite:
   params:
     source: {ref: v2-lite}
   defaultHeaders:
-    Cache-Control: 'public, max-age=3600, s-maxage=3600'
+    Cache-Control: 'public, max-age=43200, s-maxage=43200'
 
 basemap:
   public: true
@@ -59,6 +59,8 @@ ozbasemap:
   uri: overzoom://
   params:
     source: {ref: basemap}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=43200, s-maxage=43200'
 
 poi:
   public: true
@@ -81,3 +83,5 @@ ozpoi:
   uri: overzoom://
   params:
     source: {ref: poi}
+  defaultHeaders:
+    Cache-Control: 'public, max-age=43200, s-maxage=43200'
