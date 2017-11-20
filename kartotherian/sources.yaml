@@ -13,7 +13,7 @@ osm-intl:  # This name is the default Kartotherian leaflet test app layer name
     npmpath: ["@mapbox/mapbox-studio-osm-bright", "project.xml"]
     # loader: "@kartotherian/osm-bright-style"  
   xmlSetParams:
-    source: {ref: oz}
+    source: {ref: ozbasemap}
 
 v2-lite:
   public: true
