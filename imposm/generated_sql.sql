@@ -1420,6 +1420,20 @@ RETURNS TABLE(geometry geometry, osm_id bigint, render_height int, render_min_he
     ORDER BY render_height ASC, ST_YMin(geometry) DESC;
 $$ LANGUAGE SQL IMMUTABLE;
 
+
+CREATE OR REPLACE FUNCTION layer_building_no_height(bbox geometry, zoom_level int)
+RETURNS TABLE(geometry geometry, osm_id bigint) AS $$
+    SELECT geometry, osm_id
+    FROM (
+        -- etldoc: osm_building_polygon -> layer_building:z14_
+        SELECT DISTINCT ON (osm_id)
+           osm_id, geometry
+        FROM osm_all_buildings
+        WHERE zoom_level >= 14 AND geometry && bbox
+    ) AS zoom_levels
+    ORDER BY ST_YMin(geometry) DESC;
+$$ LANGUAGE SQL IMMUTABLE;
+
 -- not handled: where a building outline covers building parts
 
 DO $$ BEGIN RAISE NOTICE 'Layer water_name'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_marine_point;

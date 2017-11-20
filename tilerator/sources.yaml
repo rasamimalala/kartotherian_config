@@ -37,23 +37,13 @@ v2-lite:
     durablewrite: 0
     createIfMissing: true
 
-dyn-lite:
-  uri: autogen://
-  params:
-    storage: {ref: v2-lite}
-    generator: {ref: ozgen-lite}
-    # Optional:
-    mingen: 10  # Only generate tiles if missing within this zoom range
-    maxgen: 13
-    minstore: 10  # if generated, only store them if within this zoom range 
-    maxstore: 13
-
 oz-lite:
   public: true
   formats: [pbf]
   uri: overzoom://
   params:
-    source: {ref: dyn-lite}
+    source: {ref: v2-lite}
+
 
 ### Basemap without POIs
 gen_basemap:
@@ -100,18 +90,8 @@ ozbasemap: # faut tester
   formats: [pbf]
   uri: overzoom://
   params:
-    source: {ref: gen}
+    source: {ref: basemap}
 
-dynbasemap:
-  uri: autogen://
-  params:
-    storage: {ref: basemap}
-    generator: {ref: ozbasemap}
-    # Optional:
-    mingen: 10  # Only generate tiles if missing within this zoom range
-    maxgen: 15
-    minstore: 10  # if generated, only store them if within this zoom range 
-    maxstore: 15
 
 # Generate POIs layer
 gen_poi:

@@ -197,7 +197,7 @@
        <Parameter name="password"><![CDATA[gis]]></Parameter>
        <Parameter name="port"><![CDATA[5432]]></Parameter>
        <Parameter name="srid"><![CDATA[900913]]></Parameter>
-       <Parameter name="table"><![CDATA[(SELECT geometry, render_height, render_min_height FROM layer_building(!bbox!, z(!scale_denominator!))) AS t]]></Parameter>
+       <Parameter name="table"><![CDATA[(SELECT geometry FROM layer_building_no_height(!bbox!, z(!scale_denominator!))) AS t]]></Parameter>
        <Parameter name="type"><![CDATA[postgis]]></Parameter>
        <Parameter name="user"><![CDATA[gis]]></Parameter>
     </Datasource>
