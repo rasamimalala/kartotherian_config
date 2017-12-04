@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-set -x
 
 description="OpenStreetMap database update script"
 version="0.1/20171009"
@@ -48,8 +46,15 @@ OSMOSIS=/usr/bin/osmosis
 STOP_FILE=${W_DIR}/stop
 
 # imposm
-IMPOSM_CONFIG_FILE=/data/imposm/diff/config.json
+IMPOSM_CONFIG_FILE=/data/imposm/diff/config.json  # default value for the config file. can be set with the --config option
 
+#tilerator
+TILERATOR_URL=http://localhost:16534
+FROM_ZOOM=11
+BEFORE_ZOOM=15 # exclusive
+EXPIRE_TILES_DIRECTORY=/data/imposm/expiretiles
+TILERATOR_GENERATOR=substbasemap
+TILERATOR_STORAGE=basemap
 # ----------------------------------------------------------------------------
 
 usage () {
@@ -57,21 +62,24 @@ usage () {
 	echo
 	echo "    $description"
 	echo
-	echo "    usage: $0 <path to planet file>"
-	echo "        INIT mode: initialize Osmosis directory and apply OSM diffs on database"
+	echo "OPTIONS:"
 	echo
-	echo "    usage: $0"
-	echo "        UPDATE mode:"
+	echo "    --osm, -o        <path to planet file>"
+	echo "        when this option is passed, we are in INIT mode: initialize Osmosis directory and apply OSM diffs on database"
+	echo
+	echo "        when this option is not passed, we are in UPDATE mode:"
 	echo "        apply diffs on OSM database based on a already initialized"
 	echo "        Osmosis working directory"
 	echo
-	echo "    usage: $0 -h"
+	echo "    --config, -c     <path to a imposm config file> [default: /data/imposm/diff/config.json]"
+	echo
+	echo "    --help, -h"
 	echo "        display help and version"
 	echo
 	echo "    Create a file named $(basename $STOP_FILE) into $W_DIR directory"
 	echo "        to put process on hold."
 	echo
-	echo "    Dependencies: osmosis, imposm3"
+	echo "    Dependencies: osmosis, imposm3, jq"
 	echo
 	exit 0
 }
@@ -125,8 +133,43 @@ touch $LOG_FILE $LOCK_FILE
 find ${LOG_DIR} -name "*.log" -mtime +$LOG_MAXDAYS -delete
 
 
+OPTIONS=ctho
+LONGOPTIONS=config:,tilerator:,help,osm:
+
+PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
+if [[ $? -ne 0 ]]; then
+	log_error "impossible to parse the arguments"
+fi
+# read getopt’s output this way to handle the quoting right:
+eval set -- "$PARSED"
+
+# now enjoy the options in order and nicely split until we see --
+while true; do
+    case "$1" in
+        -c|--config)
+            IMPOSM_CONFIG_FILE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            HELP=true
+            shift
+            ;;
+        -o|--osm)
+            OSM_FILE="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            log_error "argument parsing errors"
+            ;;
+    esac
+done
+
 # Help and configuration checks
-[ "$1" == "-h" ] && usage
+[ "$HELP" == true ] && usage
 [ ! -f "$OSMOSIS" ] && log_error "$OSMOSIS not found"
 
 
@@ -150,7 +193,7 @@ if [ ! -f $PGPASS ]; then
 fi
 
 # Set running mode init or update
-if [ ! -z $1 ]; then
+if [ ! -z $OSM_FILE ]; then
 	INIT_MODE=true
 	log "running in INIT mode"
 else
@@ -162,15 +205,15 @@ fi
 if [ $INIT_MODE = true ]; then
 
 	# Check planet file exists
-	if [ ! -f $1 ]; then
-		log_error "file $1 not found"
+	if [ ! -f $OSM_FILE ]; then
+		log_error "file $OSM_FILE not found"
 	fi
 
 	log "initializing osmosis working directory: ${W_DIR}"
 	$OSMOSIS --read-replication-interval-init workingDirectory=${W_DIR} &>> $LOG_FILE
 
-	log "extract timestamp from planet file: $1"
-	TIMESTAMP=$(osmconvert $1 --out-timestamp)
+	log "extract timestamp from planet file: $OSM_FILE"
+	TIMESTAMP=$(osmconvert $OSM_FILE --out-timestamp)
 	log "planet file timestamp is: ${TIMESTAMP}"
 	# Rewind 2 hours
 	TIMESTAMP_START=$(date -u -d @$(($(date -d "${TIMESTAMP}" '+%s') - 7200)) '+%FT%TZ')
@@ -210,6 +253,36 @@ log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' 
 if ! imposm3 diff -config $IMPOSM_CONFIG_FILE ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
 
     log_error "imposm3 failed"
+fi
+
+log "generating tiles"
+
+# tilerator takes a list a file separated by a pipe
+function concat_with_pipe { local IFS="|"; echo "$*";}
+# we load all the tiles generated this day
+EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
+
+log "file with tile to regenerate = $EXPIRE_TILES_FILE"
+
+curl_log=$(curl --fail -s --noproxy localhost -XPOST "$TILERATOR_URL/add?"\
+"generatorId=$TILERATOR_GENERATOR"\
+"&storageId=$TILERATOR_STORAGE"\
+"&zoom=$FROM_ZOOM"\
+"&fromZoom=$FROM_ZOOM"\
+"&beforeZoom=$BEFORE_ZOOM"\
+"&keepJob=true"\
+"&parts=40"\
+"&deleteEmpty=true"\
+"&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
+
+if [ -z ${curl_log} ]; then
+	log_error "curl fail"
+fi
+
+# tilerator return a 200 even if it fails...
+ERRORS=$(echo $curl_log | jq ".error")
+if ! [ -z "$ERRORS" ]; then
+	log_error "tilerator fail: $ERRORS"
 fi
 
 free_lock
