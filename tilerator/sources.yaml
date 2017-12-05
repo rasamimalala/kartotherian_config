@@ -12,7 +12,7 @@ gen-lite:
       host: 'localhost'
       type: postgis
     set:
-      host: postgres
+      host: {var: osmdb-host}
       user: {var: osmdb-user}
       password: {var: osmdb-pswd}
 
@@ -57,7 +57,7 @@ gen_basemap:
       host: 'localhost'
       type: postgis
     set:
-      host: postgres
+      host: {var: osmdb-host}
       user: {var: osmdb-user}
       password: {var: osmdb-pswd}
 
@@ -105,7 +105,7 @@ gen_poi:
       host: 'localhost'
       type: postgis
     set:
-      host: postgres
+      host: {var: osmdb-host}
       user: {var: osmdb-user}
       password: {var: osmdb-pswd}
 
