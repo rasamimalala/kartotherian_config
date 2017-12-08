@@ -85,14 +85,6 @@ substbasemap:  # only for basemap
     maxsize: 100
     layers: [water, landuse, landcover]
 
-ozbasemap: # faut tester 
-  public: true
-  formats: [pbf]
-  uri: overzoom://
-  params:
-    source: {ref: basemap}
-
-
 # Generate POIs layer
 gen_poi:
   public: true
@@ -123,11 +115,4 @@ poi:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
-
-ozpoi:
-  public: true
-  formats: [pbf]
-  uri: overzoom://
-  params:
-    source: {ref: poi}
 
