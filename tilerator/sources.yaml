@@ -50,7 +50,7 @@ gen_basemap:
   public: true
   formats: [pbf]
   uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_basemap.xml"
+  xml: "/etc/tilerator/data_tm2source_base.xml"
   xmlSetDataSource:
     if:
       dbname: gis
