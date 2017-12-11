@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION slice_language_tags(tags hstore)
 RETURNS hstore AS $$
-    SELECT slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'name'])
+    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name']))
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer water'; END$$;CREATE OR REPLACE FUNCTION water_class(waterway TEXT) RETURNS TEXT AS $$
     SELECT CASE WHEN waterway='' THEN 'lake' ELSE 'river' END;
@@ -171,21 +171,22 @@ RETURNS TABLE(geometry geometry, class text) AS $$
     ) AS zoom_levels
     WHERE geometry && bbox;
 $$ LANGUAGE SQL IMMUTABLE;
-DO $$ BEGIN RAISE NOTICE 'Layer waterway'; END$$;DO $$
-BEGIN
-  update osm_waterway_linestring SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen1 SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen2 SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen3 SET tags = tags || get_basic_names(tags, geometry);
-END $$;
+DO $$ BEGIN RAISE NOTICE 'Layer waterway'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_waterway_linestring;
 DROP TRIGGER IF EXISTS trigger_refresh ON osm_waterway_linestring;
 
 DO $$
 BEGIN
-  update osm_waterway_linestring SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen1 SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen2 SET tags = tags || get_basic_names(tags, geometry);
-  update osm_waterway_linestring_gen3 SET tags = tags || get_basic_names(tags, geometry);
+  update osm_waterway_linestring
+      SET tags = update_tags(tags, geometry);
+
+  update osm_waterway_linestring_gen1
+      SET tags = update_tags(tags, geometry);
+
+  update osm_waterway_linestring_gen2
+      SET tags = update_tags(tags, geometry);
+
+  update osm_waterway_linestring_gen3
+      SET tags = update_tags(tags, geometry);
 END $$;
 
 
@@ -195,8 +196,8 @@ CREATE SCHEMA IF NOT EXISTS waterway_linestring;
 CREATE OR REPLACE FUNCTION waterway_linestring.refresh() RETURNS trigger AS
   $BODY$
   BEGIN
-    RAISE NOTICE 'Refresh waterway_linestring %', NEW.osm_id;
-    NEW.tags = NEW.tags || get_basic_names(NEW.tags, NEW.geometry);
+--     RAISE NOTICE 'Refresh waterway_linestring %', NEW.osm_id;
+    NEW.tags = update_tags(NEW.tags, NEW.geometry);
     RETURN NEW;
   END;
   $BODY$
@@ -206,7 +207,6 @@ CREATE TRIGGER trigger_refresh
     BEFORE INSERT OR UPDATE ON osm_waterway_linestring
     FOR EACH ROW
     EXECUTE PROCEDURE waterway_linestring.refresh();
-DROP TRIGGER IF EXISTS trigger_flag ON osm_waterway_linestring;
 DROP TRIGGER IF EXISTS trigger_refresh ON waterway_important.updates;
 
 -- We merge the waterways by name like the highways
@@ -234,10 +234,10 @@ CREATE MATERIALIZED VIEW osm_important_waterway_linestring AS (
     FROM (
         SELECT
             ST_LineMerge(ST_Union(geometry)) AS geometry,
-            name, name_en, name_de, tags
+            name, name_en, name_de, slice_language_tags(tags) AS tags
         FROM osm_waterway_linestring
         WHERE name <> '' AND waterway = 'river'
-        GROUP BY name, name_en, name_de, tags
+        GROUP BY name, name_en, name_de, slice_language_tags(tags)
     ) AS waterway_union
 );
 CREATE INDEX IF NOT EXISTS osm_important_waterway_linestring_geometry_idx ON osm_important_waterway_linestring USING gist(geometry);
@@ -409,12 +409,16 @@ DO $$ BEGIN RAISE NOTICE 'Layer landcover'; END$$;--TODO: Find a way to nicely g
 
 CREATE OR REPLACE FUNCTION landcover_class(landuse VARCHAR, "natural" VARCHAR, leisure VARCHAR, wetland VARCHAR) RETURNS TEXT AS $$
     SELECT CASE
-         WHEN landuse IN ('farmland', 'farm', 'orchard', 'vineyard', 'plant_nursery') THEN 'farmland'
-         WHEN "natural" IN ('glacier', 'ice_shelf') THEN 'ice'
-         WHEN "natural"='wood' OR landuse IN ('forest') THEN 'wood'
-         WHEN "natural" IN ('bare_rock', 'scree') THEN 'rock'
-         WHEN "natural"='grassland' OR landuse IN ('grass', 'meadow', 'allotments', 'grassland', 'park', 'village_green', 'recreation_ground') OR leisure='park' THEN 'grass'
-         WHEN "natural"='wetland' OR wetland IN ('bog', 'swamp', 'wet_meadow', 'marsh', 'reedbed', 'saltern', 'tidalflat', 'saltmarsh', 'mangrove') THEN 'wetland'
+        WHEN landuse IN ('farmland', 'farm', 'orchard', 'vineyard', 'plant_nursery') THEN 'farmland'
+        WHEN "natural" IN ('glacier', 'ice_shelf') THEN 'ice'
+        WHEN "natural"='wood' OR landuse IN ('forest') THEN 'wood'
+        WHEN "natural" IN ('bare_rock', 'scree') THEN 'rock'
+        WHEN "natural"='grassland'
+            OR landuse IN ('grass', 'meadow', 'allotments', 'grassland',
+                'park', 'village_green', 'recreation_ground')
+            OR leisure IN ('park', 'garden')
+            THEN 'grass'
+        WHEN "natural"='wetland' OR wetland IN ('bog', 'swamp', 'wet_meadow', 'marsh', 'reedbed', 'saltern', 'tidalflat', 'saltmarsh', 'mangrove') THEN 'wetland'
         ELSE NULL
     END;
 $$ LANGUAGE SQL IMMUTABLE;
@@ -480,8 +484,7 @@ CREATE OR REPLACE VIEW landcover_z14 AS (
     SELECT osm_id, geometry, landuse, "natural", leisure, wetland FROM osm_landcover_polygon
 );
 
--- etldoc: layer_landcover[shape=record fillcolor=lightpink, style="rounded,filled",
--- etldoc:     label="layer_landcover | <z0_1> z0-z1 | <z2_4> z2-z4 | <z5_7> z5-z7 | <z8> z8 |<z9> z9 |<z10> z10 |<z11> z11 |<z12> z12|<z13> z13|<z14_> z14+" ] ;
+-- etldoc: layer_landcover[shape=record fillcolor=lightpink, style="rounded, filled", label="layer_landcover | <z0_1> z0-z1 | <z2_4> z2-z4 | <z5_6> z5-z6 |<z7> z7 |<z8> z8 |<z9> z9 |<z10> z10 |<z11> z11 |<z12> z12|<z13> z13|<z14_> z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_landcover(bbox geometry, zoom_level int)
 RETURNS TABLE(osm_id bigint, geometry geometry, class text, subclass text) AS $$
@@ -646,7 +649,7 @@ DROP TRIGGER IF EXISTS trigger_refresh ON mountain_peak_point.updates;
 CREATE OR REPLACE FUNCTION update_osm_peak_point() RETURNS VOID AS $$
 BEGIN
   UPDATE osm_peak_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -807,7 +810,7 @@ CREATE OR REPLACE VIEW boundary_z3 AS (
 
 
 -- etldoc: ne_10m_admin_0_boundary_lines_land -> boundary_z4
--- etldoc: ne_10m_admin_1_states_provinces_lines_shp -> boundary_z4
+-- etldoc: ne_10m_admin_1_states_provinces_lines -> boundary_z4
 -- etldoc: osm_border_linestring_gen10 -> boundary_z4
 
 CREATE OR REPLACE VIEW boundary_z4 AS (
@@ -815,8 +818,8 @@ CREATE OR REPLACE VIEW boundary_z4 AS (
     FROM ne_10m_admin_0_boundary_lines_land
     UNION ALL
     SELECT geometry, 4 AS admin_level, false AS disputed, false AS maritime
-    FROM ne_10m_admin_1_states_provinces_lines_shp
-    WHERE scalerank <= 3 AND featurecla = 'Adm-1 boundary'
+    FROM ne_10m_admin_1_states_provinces_lines
+    WHERE scalerank <= 3 AND min_zoom <= 7
     UNION ALL
     SELECT geometry, admin_level, disputed, maritime
     FROM osm_border_linestring_gen10
@@ -824,7 +827,7 @@ CREATE OR REPLACE VIEW boundary_z4 AS (
 );
 
 -- etldoc: ne_10m_admin_0_boundary_lines_land -> boundary_z5
--- etldoc: ne_10m_admin_1_states_provinces_lines_shp -> boundary_z5
+-- etldoc: ne_10m_admin_1_states_provinces_lines -> boundary_z5
 -- etldoc: osm_border_linestring_gen9 -> boundary_z5
 
 CREATE OR REPLACE VIEW boundary_z5 AS (
@@ -832,8 +835,8 @@ CREATE OR REPLACE VIEW boundary_z5 AS (
     FROM ne_10m_admin_0_boundary_lines_land
     UNION ALL
     SELECT geometry, 4 AS admin_level, false AS disputed, false AS maritime
-    FROM ne_10m_admin_1_states_provinces_lines_shp
-    WHERE scalerank <= 7 AND featurecla = 'Adm-1 boundary'
+    FROM ne_10m_admin_1_states_provinces_lines
+    WHERE scalerank <= 7 AND min_zoom <= 8
     UNION ALL
     SELECT geometry, admin_level, disputed, maritime
     FROM osm_border_linestring_gen9
@@ -939,19 +942,34 @@ RETURNS TABLE(geometry geometry, admin_level int, disputed int, maritime int) AS
         -- etldoc: boundary_z13 -> layer_boundary:z13
         SELECT * FROM boundary_z13 WHERE geometry && bbox AND zoom_level >= 13
     ) AS zoom_levels;
-$$ LANGUAGE SQL IMMUTABLE;
-DO $$ BEGIN RAISE NOTICE 'Layer aeroway'; END$$;-- etldoc: layer_aeroway[shape=record fillcolor=lightpink, style="rounded,filled",
--- etldoc:     label="layer_aeroway |<z11> z11|<z12> z12|<z13> z13|<z14_> z14+" ];
+$$ LANGUAGE SQL IMMUTABLE;DO $$ BEGIN RAISE NOTICE 'Layer aeroway'; END$$;-- etldoc: layer_aeroway[shape=record fillcolor=lightpink, style="rounded,filled",
+-- etldoc:     label="layer_aeroway |<z10> z10|<z11> z11|<z12> z12|<z13> z13|<z14_> z14+" ];
 
 CREATE OR REPLACE FUNCTION layer_aeroway(bbox geometry, zoom_level int)
 RETURNS TABLE(geometry geometry, class text, ref text) AS $$
     SELECT geometry, aeroway AS class, ref FROM (
-        -- etldoc:  osm_aeroway_linestring -> layer_aeroway:z11
-        -- etldoc:  osm_aeroway_linestring -> layer_aeroway:z12
+        -- etldoc:  osm_aeroway_linestring_gen3 -> layer_aeroway:z10
+        SELECT geometry, aeroway, ref
+        FROM osm_aeroway_linestring_gen3 WHERE zoom_level = 10
+        UNION ALL
+        -- etldoc:  osm_aeroway_linestring_gen2 -> layer_aeroway:z11
+        SELECT geometry, aeroway, ref
+        FROM osm_aeroway_linestring_gen2 WHERE zoom_level = 11
+        UNION ALL
+        -- etldoc:  osm_aeroway_linestring_gen1 -> layer_aeroway:z12
+        SELECT geometry, aeroway, ref
+        FROM osm_aeroway_linestring_gen1 WHERE zoom_level = 12
+        UNION ALL
         -- etldoc:  osm_aeroway_linestring -> layer_aeroway:z13
         -- etldoc:  osm_aeroway_linestring -> layer_aeroway:z14_
         SELECT geometry, aeroway, ref
-        FROM osm_aeroway_linestring WHERE zoom_level >= 11
+        FROM osm_aeroway_linestring WHERE zoom_level >= 13
+        UNION ALL
+
+        -- etldoc:  osm_aeroway_polygon_gen3 -> layer_aeroway:z10
+        -- etldoc:  osm_aeroway_polygon_gen3 -> layer_aeroway:z11
+        SELECT geometry, aeroway, ref
+        FROM osm_aeroway_polygon_gen3 WHERE zoom_level BETWEEN 10 AND 11
         UNION ALL
         -- etldoc:  osm_aeroway_polygon_gen2 -> layer_aeroway:z12
         SELECT geometry, aeroway, ref
@@ -978,7 +996,7 @@ $$ LANGUAGE SQL IMMUTABLE STRICT;
 
 -- The classes for highways are derived from the classes used in ClearTables
 -- https://github.com/ClearTables/ClearTables/blob/master/transportation.lua
-CREATE OR REPLACE FUNCTION highway_class(highway TEXT) RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION highway_class(highway TEXT, public_transport TEXT) RETURNS TEXT AS $$
     SELECT CASE
         WHEN highway IN ('motorway', 'motorway_link') THEN 'motorway'
         WHEN highway IN ('trunk', 'trunk_link') THEN 'trunk'
@@ -987,11 +1005,11 @@ CREATE OR REPLACE FUNCTION highway_class(highway TEXT) RETURNS TEXT AS $$
         WHEN highway IN ('tertiary', 'tertiary_link') THEN 'tertiary'
         WHEN highway IN ('unclassified', 'residential', 'living_street', 'road') THEN 'minor'
         WHEN highway IN ('service', 'track') THEN highway
-        WHEN highway IN ('pedestrian', 'path', 'footway', 'cycleway', 'steps', 'bridleway', 'corridor') THEN 'path'
+        WHEN highway IN ('pedestrian', 'path', 'footway', 'cycleway', 'steps', 'bridleway', 'corridor') OR public_transport IN ('platform') THEN 'path'
         WHEN highway = 'raceway' THEN 'raceway'
         ELSE NULL
     END;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
+$$ LANGUAGE SQL IMMUTABLE;
 
 -- The classes for railways are derived from the classes used in ClearTables
 -- https://github.com/ClearTables/ClearTables/blob/master/transportation.lua
@@ -1164,26 +1182,43 @@ $$ LANGUAGE SQL IMMUTABLE STRICT;
 -- etldoc: layer_transportation[shape=record fillcolor=lightpink, style="rounded,filled",
 -- etldoc:     label="<sql> layer_transportation |<z4> z4 |<z5> z5 |<z6> z6 |<z7> z7 |<z8> z8 |<z9> z9 |<z10> z10 |<z11> z11 |<z12> z12|<z13> z13|<z14_> z14+" ] ;
 CREATE OR REPLACE FUNCTION layer_transportation(bbox geometry, zoom_level int)
-RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int, brunnel TEXT, service TEXT) AS $$
+RETURNS TABLE(osm_id bigint, geometry geometry, class text, subclass text,
+ramp int, oneway int, brunnel TEXT, service TEXT, layer INT, level INT,
+indoor INT) AS $$
     SELECT
         osm_id, geometry,
         CASE
-            WHEN highway IS NOT NULL THEN highway_class(highway)
+            WHEN highway IS NOT NULL OR public_transport IS NOT NULL THEN highway_class(highway, public_transport)
             WHEN railway IS NOT NULL THEN railway_class(railway)
+            WHEN aerialway IS NOT NULL THEN aerialway
+            WHEN shipway IS NOT NULL THEN shipway
         END AS class,
+        CASE
+            WHEN railway IS NOT NULL THEN railway
+            WHEN (highway IS NOT NULL OR public_transport IS NOT NULL)
+                AND highway_class(highway, public_transport) = 'path'
+                THEN COALESCE(NULLIF(public_transport, ''), highway)
+            ELSE NULL
+        END AS subclass,
         -- All links are considered as ramps as well
         CASE WHEN highway_is_link(highway) OR highway = 'steps'
              THEN 1 ELSE is_ramp::int END AS ramp,
         is_oneway::int AS oneway,
         brunnel(is_bridge, is_tunnel, is_ford) AS brunnel,
-        NULLIF(service, '') AS service
+        NULLIF(service, '') AS service,
+        NULLIF(layer, 0) AS layer,
+        "level",
+        CASE WHEN indoor=TRUE THEN 1 ELSE NULL END as indoor
     FROM (
         -- etldoc: osm_transportation_merge_linestring_gen7 -> layer_transportation:z4
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_transportation_merge_linestring_gen7
         WHERE zoom_level = 4
@@ -1191,10 +1226,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
 
         -- etldoc: osm_transportation_merge_linestring_gen6 -> layer_transportation:z5
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_transportation_merge_linestring_gen6
         WHERE zoom_level = 5
@@ -1202,10 +1240,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
 
         -- etldoc: osm_transportation_merge_linestring_gen5 -> layer_transportation:z6
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_transportation_merge_linestring_gen5
         WHERE zoom_level = 6
@@ -1213,10 +1254,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
 
         -- etldoc: osm_transportation_merge_linestring_gen4  ->  layer_transportation:z7
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_transportation_merge_linestring_gen4
         WHERE zoom_level = 7
@@ -1224,10 +1268,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
 
         -- etldoc: osm_transportation_merge_linestring_gen3  ->  layer_transportation:z8
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_transportation_merge_linestring_gen3
         WHERE zoom_level = 8
@@ -1236,10 +1283,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
         -- etldoc: osm_highway_linestring_gen2  ->  layer_transportation:z9
         -- etldoc: osm_highway_linestring_gen2  ->  layer_transportation:z10
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_highway_linestring_gen2
         WHERE zoom_level BETWEEN 9 AND 10
@@ -1248,10 +1298,13 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
 
         -- etldoc: osm_highway_linestring_gen1  ->  layer_transportation:z11
         SELECT
-            osm_id, geometry, highway, NULL AS railway, NULL AS service,
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, NULL AS service,
             NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
             NULL::boolean AS is_ford,
             NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
             z_order
         FROM osm_highway_linestring_gen1
         WHERE zoom_level = 11
@@ -1262,56 +1315,176 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
         -- etldoc: osm_highway_linestring       ->  layer_transportation:z13
         -- etldoc: osm_highway_linestring       ->  layer_transportation:z14_
         SELECT
-            osm_id, geometry, highway, NULL AS railway,
-            service_value(service) AS service,
-            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway, z_order
+            osm_id, geometry,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            CASE WHEN highway IN ('footway', 'steps') THEN layer
+                ELSE NULL::int
+            END AS layer,
+            CASE WHEN highway IN ('footway', 'steps') THEN "level"
+                ELSE NULL::int
+            END AS "level",
+            CASE WHEN highway IN ('footway', 'steps') THEN indoor
+                ELSE NULL::boolean
+            END AS indoor,
+            z_order
         FROM osm_highway_linestring
         WHERE NOT is_area AND (
             zoom_level = 12 AND (
-                highway_class(highway) NOT IN ('track', 'path', 'minor')
+                highway_class(highway, public_transport) NOT IN ('track', 'path', 'minor')
                 OR highway IN ('unclassified', 'residential')
             )
-            OR zoom_level = 13 AND highway_class(highway) NOT IN ('track', 'path')
+            OR zoom_level = 13
+                AND highway_class(highway, public_transport) NOT IN ('track', 'path')
             OR zoom_level >= 14
         )
         UNION ALL
 
+        -- etldoc: osm_railway_linestring_gen5  ->  layer_transportation:z8
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
+            NULL::boolean AS is_ford,
+            NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_railway_linestring_gen5
+        WHERE zoom_level = 8
+            AND railway='rail' AND service = '' and usage='main'
+        UNION ALL
+
+        -- etldoc: osm_railway_linestring_gen4  ->  layer_transportation:z9
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            NULL::boolean AS is_bridge, NULL::boolean AS is_tunnel,
+            NULL::boolean AS is_ford,
+            NULL::boolean AS is_ramp, NULL::boolean AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_railway_linestring_gen4
+        WHERE zoom_level = 9
+            AND railway='rail' AND service = '' and usage='main'
+        UNION ALL
+
         -- etldoc: osm_railway_linestring_gen3  ->  layer_transportation:z10
         SELECT
-            osm_id, geometry, NULL AS highway, railway,
-            service_value(service) AS service,
-            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway, z_order
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
         FROM osm_railway_linestring_gen3
-        WHERE zoom_level = 10 AND (railway='rail' AND service = '')
+        WHERE zoom_level = 10
+            AND railway IN ('rail', 'narrow_gauge') AND service = ''
         UNION ALL
 
         -- etldoc: osm_railway_linestring_gen2  ->  layer_transportation:z11
         SELECT
-            osm_id, geometry, NULL AS highway, railway,
-            service_value(service) AS service,
-            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway, z_order
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
         FROM osm_railway_linestring_gen2
-        WHERE zoom_level = 11 AND (railway='rail' AND service = '')
+        WHERE zoom_level = 11
+            AND railway IN ('rail', 'narrow_gauge', 'light_rail') AND service = ''
         UNION ALL
 
         -- etldoc: osm_railway_linestring_gen1  ->  layer_transportation:z12
         SELECT
-            osm_id, geometry, NULL AS highway, railway,
-            service_value(service) AS service,
-            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway, z_order
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
         FROM osm_railway_linestring_gen1
-        WHERE zoom_level = 12 AND (railway='rail' AND service = '')
+        WHERE zoom_level = 12
+            AND railway IN ('rail', 'narrow_gauge', 'light_rail') AND service = ''
         UNION ALL
 
         -- etldoc: osm_railway_linestring       ->  layer_transportation:z13
         -- etldoc: osm_railway_linestring       ->  layer_transportation:z14_
         SELECT
-            osm_id, geometry, NULL AS highway, railway,
-            service_value(service) AS service,
-            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway, z_order
+            osm_id, geometry,
+            NULL AS highway, railway, NULL AS aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
         FROM osm_railway_linestring
-        WHERE zoom_level = 13 AND (railway='rail' AND service = '')
-           OR zoom_Level >= 14
+        WHERE zoom_level = 13
+                AND railway IN ('rail', 'narrow_gauge', 'light_rail') AND service = ''
+            OR zoom_Level >= 14
+        UNION ALL
+
+        -- etldoc: osm_aerialway_linestring_gen1  ->  layer_transportation:z12
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, NULL as railway, aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_aerialway_linestring_gen1
+        WHERE zoom_level = 12
+        UNION ALL
+
+        -- etldoc: osm_aerialway_linestring       ->  layer_transportation:z13
+        -- etldoc: osm_aerialway_linestring       ->  layer_transportation:z14_
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, NULL as railway, aerialway, NULL AS shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_aerialway_linestring
+        WHERE zoom_level >= 13
+        UNION ALL
+
+        -- etldoc: osm_shipway_linestring_gen2  ->  layer_transportation:z11
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, NULL AS railway, NULL AS aerialway, shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_shipway_linestring_gen2
+        WHERE zoom_level = 11
+        UNION ALL
+
+        -- etldoc: osm_shipway_linestring_gen1  ->  layer_transportation:z12
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, NULL AS railway, NULL AS aerialway, shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_shipway_linestring_gen1
+        WHERE zoom_level = 12
+        UNION ALL
+
+        -- etldoc: osm_shipway_linestring       ->  layer_transportation:z13
+        -- etldoc: osm_shipway_linestring       ->  layer_transportation:z14_
+        SELECT
+            osm_id, geometry,
+            NULL AS highway, NULL AS railway, NULL AS aerialway, shipway,
+            NULL AS public_transport, service_value(service) AS service,
+            is_bridge, is_tunnel, is_ford, is_ramp, is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
+        FROM osm_shipway_linestring
+        WHERE zoom_level >= 13
         UNION ALL
 
         -- NOTE: We limit the selection of polys because we need to be
@@ -1322,9 +1495,12 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text, ramp int, oneway int
         -- etldoc: osm_highway_polygon          ->  layer_transportation:z14_
         SELECT
             osm_id, geometry,
-            highway, NULL AS railway, NULL AS service,
+            highway, NULL AS railway, NULL AS aerialway, NULL AS shipway,
+            public_transport, NULL AS service,
             FALSE AS is_bridge, FALSE AS is_tunnel, FALSE AS is_ford,
-            FALSE AS is_ramp, FALSE AS is_oneway, z_order
+            FALSE AS is_ramp, FALSE AS is_oneway,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor,
+            z_order
         FROM osm_highway_polygon
         -- We do not want underground pedestrian areas for now
         WHERE zoom_level >= 13 AND is_area AND COALESCE(layer, 0) >= 0
@@ -1384,7 +1560,7 @@ CREATE OR REPLACE VIEW osm_all_buildings AS (
          osm_building_street WHERE role = 'house'
          UNION ALL
 
-         -- etldoc: osm_building_polygon -> layer_building:z14_
+         -- etldoc: osm_building_multipolygon -> layer_building:z14_
          -- Buildings that are inner/outer
          SELECT osm_id,geometry,
                   COALESCE(nullif(as_numeric(height),-1),nullif(as_numeric(buildingheight),-1)) as height,
@@ -1415,11 +1591,12 @@ RETURNS TABLE(geometry geometry, osm_id bigint, render_height int, render_min_he
            ceil( COALESCE(height, levels*3.66,5))::int AS render_height,
            floor(COALESCE(min_height, min_level*3.66,0))::int AS render_min_height FROM
         osm_all_buildings
-        WHERE zoom_level >= 14 AND geometry && bbox
+        WHERE
+            (levels IS NULL OR levels < 1000) AND
+            zoom_level >= 14 AND geometry && bbox
     ) AS zoom_levels
     ORDER BY render_height ASC, ST_YMin(geometry) DESC;
 $$ LANGUAGE SQL IMMUTABLE;
-
 
 CREATE OR REPLACE FUNCTION layer_building_no_height(bbox geometry, zoom_level int)
 RETURNS TABLE(geometry geometry, osm_id bigint) AS $$
@@ -1435,178 +1612,6 @@ RETURNS TABLE(geometry geometry, osm_id bigint) AS $$
 $$ LANGUAGE SQL IMMUTABLE;
 
 -- not handled: where a building outline covers building parts
-
-DO $$ BEGIN RAISE NOTICE 'Layer water_name'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_marine_point;
-DROP TRIGGER IF EXISTS trigger_refresh ON water_name_marine.updates;
-
-CREATE EXTENSION IF NOT EXISTS unaccent;
-
-CREATE OR REPLACE FUNCTION update_osm_marine_point() RETURNS VOID AS $$
-BEGIN
-  -- etldoc: osm_marine_point          -> osm_marine_point
-  UPDATE osm_marine_point AS osm SET "rank" = NULL WHERE "rank" IS NOT NULL;
-
-  -- etldoc: ne_10m_geography_marine_polys -> osm_marine_point
-  -- etldoc: osm_marine_point              -> osm_marine_point
-
-  WITH important_marine_point AS (
-      SELECT osm.geometry, osm.osm_id, osm.name, osm.name_en, ne.scalerank
-      FROM ne_10m_geography_marine_polys AS ne, osm_marine_point AS osm
-      WHERE ne.name ILIKE osm.name
-  )
-  UPDATE osm_marine_point AS osm
-  SET "rank" = scalerank
-  FROM important_marine_point AS ne
-  WHERE osm.osm_id = ne.osm_id;
-
-  UPDATE osm_marine_point
-  SET tags = tags || get_basic_names(tags, geometry)
-  WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
-
-END;
-$$ LANGUAGE plpgsql;
-
-SELECT update_osm_marine_point();
-
-CREATE INDEX IF NOT EXISTS osm_marine_point_rank_idx ON osm_marine_point("rank");
-
--- Handle updates
-CREATE SCHEMA IF NOT EXISTS water_name_marine;
-
-CREATE TABLE IF NOT EXISTS water_name_marine.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION water_name_marine.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO water_name_marine.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION water_name_marine.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh water_name_marine rank';
-    PERFORM update_osm_marine_point();
-    DELETE FROM water_name_marine.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag
-    AFTER INSERT OR UPDATE OR DELETE ON osm_marine_point
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE water_name_marine.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON water_name_marine.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE water_name_marine.refresh();
-DROP TRIGGER IF EXISTS trigger_flag_line ON osm_water_polygon;
-DROP TRIGGER IF EXISTS trigger_refresh ON water_lakeline.updates;
-
--- etldoc:  osm_water_polygon ->  osm_water_lakeline
--- etldoc:  lake_centerline  ->  osm_water_lakeline
-DROP MATERIALIZED VIEW IF EXISTS osm_water_lakeline CASCADE;
-
-CREATE MATERIALIZED VIEW osm_water_lakeline AS (
-	SELECT wp.osm_id,
-		ll.wkb_geometry AS geometry,
-		name, name_en, name_de,
-		tags || get_basic_names(tags, ll.wkb_geometry) AS tags,
-		ST_Area(wp.geometry) AS area
-    FROM osm_water_polygon AS wp
-    INNER JOIN lake_centerline ll ON wp.osm_id = ll.osm_id
-    WHERE wp.name <> ''
-);
-CREATE INDEX IF NOT EXISTS osm_water_lakeline_geometry_idx ON osm_water_lakeline USING gist(geometry);
-
--- Handle updates
-
-CREATE SCHEMA IF NOT EXISTS water_lakeline;
-
-CREATE TABLE IF NOT EXISTS water_lakeline.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION water_lakeline.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO water_lakeline.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION water_lakeline.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh water_lakeline';
-    REFRESH MATERIALIZED VIEW osm_water_lakeline;
-    DELETE FROM water_lakeline.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag_line
-    AFTER INSERT OR UPDATE OR DELETE ON osm_water_polygon
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE water_lakeline.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON water_lakeline.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE water_lakeline.refresh();
-DROP TRIGGER IF EXISTS trigger_flag_point ON osm_water_polygon;
-DROP TRIGGER IF EXISTS trigger_refresh ON water_point.updates;
-
--- etldoc:  osm_water_polygon ->  osm_water_point
--- etldoc:  lake_centerline ->  osm_water_point
-DROP MATERIALIZED VIEW IF EXISTS  osm_water_point CASCADE;
-
-CREATE MATERIALIZED VIEW osm_water_point AS (
-    SELECT
-        wp.osm_id, ST_PointOnSurface(wp.geometry) AS geometry,
-        wp.name, wp.name_en, wp.name_de,
-        wp.tags || get_basic_names(wp.tags, ST_PointOnSurface(wp.geometry)) AS tags,
-        ST_Area(wp.geometry) AS area
-    FROM osm_water_polygon AS wp
-    LEFT JOIN lake_centerline ll ON wp.osm_id = ll.osm_id
-    WHERE ll.osm_id IS NULL AND wp.name <> ''
-);
-CREATE INDEX IF NOT EXISTS osm_water_point_geometry_idx ON osm_water_point USING gist (geometry);
-
--- Handle updates
-
-CREATE SCHEMA IF NOT EXISTS water_point;
-
-CREATE TABLE IF NOT EXISTS water_point.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION water_point.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO water_point.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION water_point.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh water_point';
-    REFRESH MATERIALIZED VIEW osm_water_point;
-    DELETE FROM water_point.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag_point
-    AFTER INSERT OR UPDATE OR DELETE ON osm_water_polygon
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE water_point.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON water_point.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE water_point.refresh();
-
 DO $$ BEGIN RAISE NOTICE 'Layer transportation_name'; END$$;DROP MATERIALIZED VIEW IF EXISTS osm_transportation_name_network CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS osm_transportation_name_linestring CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS osm_transportation_name_linestring_gen1 CASCADE;
@@ -1735,6 +1740,15 @@ CREATE MATERIALIZED VIEW osm_transportation_name_network AS (
         else hl.ref
       end as ref,
       hl.highway,
+      CASE WHEN highway IN ('footway', 'steps') THEN layer
+          ELSE NULL::int
+      END AS layer,
+      CASE WHEN highway IN ('footway', 'steps') THEN "level"
+          ELSE NULL::int
+      END AS "level",
+      CASE WHEN highway IN ('footway', 'steps') THEN indoor
+          ELSE NULL::boolean
+      END AS indoor,
       ROW_NUMBER() OVER(PARTITION BY hl.osm_id
                                    ORDER BY rm.network_type) AS "rank",
       hl.z_order
@@ -1757,6 +1771,9 @@ CREATE MATERIALIZED VIEW osm_transportation_name_linestring AS (
             AS "tags",
         ref,
         highway,
+        "level",
+        layer,
+        indoor,
         network_type AS network,
         z_order
     FROM (
@@ -1767,13 +1784,16 @@ CREATE MATERIALIZED VIEW osm_transportation_name_linestring AS (
           name_de,
           ref,
           highway,
+          "level",
+          layer,
+          indoor,
           network_type,
           min(z_order) AS z_order
       FROM osm_transportation_name_network
       WHERE ("rank"=1 OR "rank" is null)
         AND (name <> '' OR ref <> '')
         AND NULLIF(highway, '') IS NOT NULL
-      group by name, name_en, name_de, ref, highway, network_type
+      group by name, name_en, name_de, ref, highway, "level", layer, indoor, network_type
     ) AS highway_union
 );
 CREATE INDEX IF NOT EXISTS osm_transportation_name_linestring_geometry_idx ON osm_transportation_name_linestring USING gist(geometry);
@@ -1875,7 +1895,9 @@ CREATE CONSTRAINT TRIGGER trigger_refresh
 -- etldoc:     label="layer_transportation_name | <z6> z6 | <z7> z7 | <z8> z8 |<z9> z9 |<z10> z10 |<z11> z11 |<z12> z12|<z13> z13|<z14_> z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_transportation_name(bbox geometry, zoom_level integer)
-RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de text, tags hstore, ref text, ref_length int, network text, class text) AS $$
+RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
+  name_de text, tags hstore, ref text, ref_length int, network text, class
+  text, subclass text, layer INT, level INT, indoor INT) AS $$
     SELECT osm_id, geometry,
       NULLIF(name, '') AS name,
       COALESCE(NULLIF(name_en, ''), name) AS name_en,
@@ -1889,48 +1911,106 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
         when length(coalesce(ref, ''))>0
           then 'road'
       end as network,
-      highway_class(highway) AS class
+      highway_class(highway, '') AS class,
+      CASE
+          WHEN highway IS NOT NULL AND highway_class(highway, '') = 'path'
+              THEN highway
+          ELSE NULL
+      END AS subclass,
+      NULLIF(layer, 0) AS layer,
+      "level",
+      CASE WHEN indoor=TRUE THEN 1 ELSE NULL END as indoor
     FROM (
 
         -- etldoc: osm_transportation_name_linestring_gen4 ->  layer_transportation_name:z6
-        SELECT * FROM osm_transportation_name_linestring_gen4
+        SELECT *,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor
+        FROM osm_transportation_name_linestring_gen4
         WHERE zoom_level = 6
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring_gen3 ->  layer_transportation_name:z7
-        SELECT * FROM osm_transportation_name_linestring_gen3
+        SELECT *,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor
+        FROM osm_transportation_name_linestring_gen3
         WHERE zoom_level = 7
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring_gen2 ->  layer_transportation_name:z8
-        SELECT * FROM osm_transportation_name_linestring_gen2
+        SELECT *,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor
+        FROM osm_transportation_name_linestring_gen2
         WHERE zoom_level = 8
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring_gen1 ->  layer_transportation_name:z9
         -- etldoc: osm_transportation_name_linestring_gen1 ->  layer_transportation_name:z10
         -- etldoc: osm_transportation_name_linestring_gen1 ->  layer_transportation_name:z11
-        SELECT * FROM osm_transportation_name_linestring_gen1
+        SELECT *,
+            NULL::int AS layer, NULL::int AS level, NULL::boolean AS indoor
+        FROM osm_transportation_name_linestring_gen1
         WHERE zoom_level BETWEEN 9 AND 11
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring ->  layer_transportation_name:z12
-        SELECT * FROM osm_transportation_name_linestring
+        SELECT
+          geometry,
+          osm_id,
+          name,
+          name_en,
+          name_de,
+          "tags",
+          ref,
+          highway,
+          network,
+          z_order,
+          layer,
+          "level",
+          indoor
+        FROM osm_transportation_name_linestring
         WHERE zoom_level = 12
             AND LineLabel(zoom_level, COALESCE(NULLIF(name, ''), ref), geometry)
-            AND highway_class(highway) NOT IN ('minor', 'track', 'path')
+            AND highway_class(highway, '') NOT IN ('minor', 'track', 'path')
             AND NOT highway_is_link(highway)
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring ->  layer_transportation_name:z13
-        SELECT * FROM osm_transportation_name_linestring
+        SELECT
+          geometry,
+          osm_id,
+          name,
+          name_en,
+          name_de,
+          "tags",
+          ref,
+          highway,
+          network,
+          z_order,
+          layer,
+          "level",
+          indoor
+        FROM osm_transportation_name_linestring
         WHERE zoom_level = 13
             AND LineLabel(zoom_level, COALESCE(NULLIF(name, ''), ref), geometry)
-            AND highway_class(highway) NOT IN ('track', 'path')
+            AND highway_class(highway, '') NOT IN ('track', 'path')
         UNION ALL
 
         -- etldoc: osm_transportation_name_linestring ->  layer_transportation_name:z14_
-        SELECT * FROM osm_transportation_name_linestring
+        SELECT
+          geometry,
+          osm_id,
+          name,
+          name_en,
+          name_de,
+          "tags",
+          ref,
+          highway,
+          network,
+          z_order,
+          layer,
+          "level",
+          indoor
+        FROM osm_transportation_name_linestring
         WHERE zoom_level >= 14
 
     ) AS zoom_levels
@@ -2023,7 +2103,7 @@ DROP TRIGGER IF EXISTS trigger_refresh ON place_continent_point.updates;
 CREATE OR REPLACE FUNCTION update_osm_continent_point() RETURNS VOID AS $$
 BEGIN
   UPDATE osm_continent_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -2075,16 +2155,24 @@ ALTER TABLE osm_country_point DROP CONSTRAINT IF EXISTS osm_country_point_rank_c
 CREATE OR REPLACE FUNCTION update_osm_country_point() RETURNS VOID AS $$
 BEGIN
 
+  UPDATE osm_country_point AS osm
+  SET
+    "rank" = 7,
+    iso3166_1_alpha_2 = COALESCE(
+      NULLIF(osm.country_code_iso3166_1_alpha_2, ''),
+      NULLIF(osm.iso3166_1_alpha_2, ''),
+      NULLIF(osm.iso3166_1, '')
+    )
+  ;
+
   WITH important_country_point AS (
       SELECT osm.geometry, osm.osm_id, osm.name, COALESCE(NULLIF(osm.name_en, ''), ne.name) AS name_en, ne.scalerank, ne.labelrank
       FROM ne_10m_admin_0_countries AS ne, osm_country_point AS osm
       WHERE
-      -- We only match whether the point is within the Natural Earth polygon
-      -- because name matching is to difficult since OSM does not contain good
-      -- enough coverage of ISO codesy
-      ST_Within(osm.geometry, ne.geometry)
-      -- We leave out tiny countries
-      AND ne.scalerank <= 1
+        -- We match only countries with ISO codes to eliminate disputed countries
+        -- that lies inside polygon of sovereign country
+        iso3166_1_alpha_2 IS NOT NULL
+        AND ST_Within(osm.geometry, ne.geometry)
   )
   UPDATE osm_country_point AS osm
   -- Normalize both scalerank and labelrank into a ranking system from 1 to 6
@@ -2093,9 +2181,37 @@ BEGIN
   FROM important_country_point AS ne
   WHERE osm.osm_id = ne.osm_id;
 
+  -- Repeat the step for archipelago countries like Philippines or Indonesia
+  -- whose label point is not within country's polygon
+  WITH important_country_point AS (
+    SELECT
+      osm.osm_id,
+--       osm.name,
+      ne.scalerank,
+      ne.labelrank,
+--       ST_Distance(osm.geometry, ne.geometry) AS distance,
+      ROW_NUMBER()
+      OVER (
+        PARTITION BY osm.osm_id
+        ORDER BY
+          ST_Distance(osm.geometry, ne.geometry)
+      ) AS rk
+    FROM osm_country_point osm,
+      ne_10m_admin_0_countries AS ne
+    WHERE
+      iso3166_1_alpha_2 IS NOT NULL
+      AND NOT (osm."rank" BETWEEN 1 AND 6)
+  )
+  UPDATE osm_country_point AS osm
+  -- Normalize both scalerank and labelrank into a ranking system from 1 to 6
+  -- where the ranks are still distributed uniform enough across all countries
+  SET "rank" = LEAST(6, CEILING((ne.scalerank + ne.labelrank)/2.0))
+  FROM important_country_point AS ne
+  WHERE osm.osm_id = ne.osm_id AND ne.rk = 1;
+
   UPDATE osm_country_point AS osm
   SET "rank" = 6
-  WHERE "rank" IS NULL;
+  WHERE "rank" = 7;
 
   -- TODO: This shouldn't be necessary? The rank function makes something wrong...
   UPDATE osm_country_point AS osm
@@ -2103,7 +2219,7 @@ BEGIN
   WHERE "rank" = 0;
 
   UPDATE osm_country_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -2156,7 +2272,7 @@ BEGIN
   UPDATE osm_island_polygon  SET geometry=ST_PointOnSurface(geometry) WHERE ST_GeometryType(geometry) <> 'ST_Point';
 
   UPDATE osm_island_polygon
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
   ANALYZE osm_island_polygon;
@@ -2205,7 +2321,7 @@ DROP TRIGGER IF EXISTS trigger_refresh ON place_island_point.updates;
 CREATE OR REPLACE FUNCTION update_osm_island_point() RETURNS VOID AS $$
 BEGIN
   UPDATE osm_island_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -2251,7 +2367,7 @@ DROP TRIGGER IF EXISTS trigger_refresh ON place_state.updates;
 
 ALTER TABLE osm_state_point DROP CONSTRAINT IF EXISTS osm_state_point_rank_constraint;
 
--- etldoc: ne_10m_admin_1_states_provinces_shp   -> osm_state_point
+-- etldoc: ne_10m_admin_1_states_provinces   -> osm_state_point
 -- etldoc: osm_state_point                       -> osm_state_point
 
 CREATE OR REPLACE FUNCTION update_osm_state_point() RETURNS VOID AS $$
@@ -2259,7 +2375,7 @@ BEGIN
 
   WITH important_state_point AS (
       SELECT osm.geometry, osm.osm_id, osm.name, COALESCE(NULLIF(osm.name_en, ''), ne.name) AS name_en, ne.scalerank, ne.labelrank, ne.datarank
-      FROM ne_10m_admin_1_states_provinces_shp AS ne, osm_state_point AS osm
+      FROM ne_10m_admin_1_states_provinces AS ne, osm_state_point AS osm
       WHERE
       -- We only match whether the point is within the Natural Earth polygon
       -- because name matching is difficult
@@ -2281,7 +2397,7 @@ BEGIN
   DELETE FROM osm_state_point WHERE "rank" IS NULL;
 
   UPDATE osm_state_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -2345,6 +2461,7 @@ BEGIN
       FROM ne_10m_populated_places AS ne, osm_city_point AS osm
       WHERE
       (
+          (osm.tags ? 'wikidata' AND osm.tags->'wikidata' = ne.wikidataid) OR
           ne.name ILIKE osm.name OR
           ne.name ILIKE osm.name_en OR
           ne.namealt ILIKE osm.name OR
@@ -2368,7 +2485,7 @@ BEGIN
   WHERE osm.osm_id = ne.osm_id;
 
   UPDATE osm_city_point
-  SET tags = tags || get_basic_names(tags, geometry)
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
 
 END;
@@ -2411,20 +2528,22 @@ CREATE CONSTRAINT TRIGGER trigger_refresh
     INITIALLY DEFERRED
     FOR EACH ROW
     EXECUTE PROCEDURE place_city.refresh();
-
 -- etldoc: layer_place[shape=record fillcolor=lightpink, style="rounded,filled",
 -- etldoc:     label="layer_place | <z0_3> z0-3|<z4_7> z4-7|<z8_11> z8-11| <z12_14> z12-z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_place(bbox geometry, zoom_level int, pixel_width numeric)
-RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de text, tags hstore, class text, "rank" int, capital INT) AS $$
+RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
+    name_de text, tags hstore, class text, "rank" int, capital INT, iso_a2
+        TEXT) AS $$
 
     -- etldoc: osm_continent_point -> layer_place:z0_3
     SELECT
-        osm_id, geometry, name,
+        osm_id*10, geometry, name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
         COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
         tags,
-        'continent' AS class, 1 AS "rank", NULL::int AS capital
+        'continent' AS class, 1 AS "rank", NULL::int AS capital,
+        NULL::text AS iso_a2
     FROM osm_continent_point
     WHERE geometry && bbox AND zoom_level < 4
     UNION ALL
@@ -2434,11 +2553,12 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
     -- etldoc: osm_country_point -> layer_place:z8_11
     -- etldoc: osm_country_point -> layer_place:z12_14
     SELECT
-        osm_id, geometry, name,
+        osm_id*10, geometry, name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
         COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
         tags,
-        'country' AS class, "rank", NULL::int AS capital
+        'country' AS class, "rank", NULL::int AS capital,
+        iso3166_1_alpha_2 AS iso_a2
     FROM osm_country_point
     WHERE geometry && bbox AND "rank" <= zoom_level + 1 AND name <> ''
     UNION ALL
@@ -2448,11 +2568,12 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
     -- etldoc: osm_state_point  -> layer_place:z8_11
     -- etldoc: osm_state_point  -> layer_place:z12_14
     SELECT
-        osm_id, geometry, name,
+        osm_id*10, geometry, name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
         COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
         tags,
-        'state' AS class, "rank", NULL::int AS capital
+        'state' AS class, "rank", NULL::int AS capital,
+        NULL::text AS iso_a2
     FROM osm_state_point
     WHERE geometry && bbox AND
           name <> '' AND
@@ -2464,11 +2585,12 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
 
     -- etldoc: osm_island_point    -> layer_place:z12_14
     SELECT
-        osm_id, geometry, name,
+        osm_id*10, geometry, name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
         COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
         tags,
-        'island' AS class, 7 AS "rank", NULL::int AS capital
+        'island' AS class, 7 AS "rank", NULL::int AS capital,
+        NULL::text AS iso_a2
     FROM osm_island_point
     WHERE zoom_level >= 12
         AND geometry && bbox
@@ -2477,11 +2599,12 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
     -- etldoc: osm_island_polygon  -> layer_place:z8_11
     -- etldoc: osm_island_polygon  -> layer_place:z12_14
     SELECT
-        osm_id, geometry, name,
+        osm_id*10, geometry, name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
         COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
         tags,
-        'island' AS class, island_rank(area) AS "rank", NULL::int AS capital
+        'island' AS class, island_rank(area) AS "rank", NULL::int AS capital,
+        NULL::text AS iso_a2
     FROM osm_island_polygon
     WHERE geometry && bbox AND
         ((zoom_level = 8 AND island_rank(area) <= 3)
@@ -2494,9 +2617,10 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de
     -- etldoc: layer_city          -> layer_place:z8_11
     -- etldoc: layer_city          -> layer_place:z12_14
     SELECT
-        osm_id, geometry, name, name_en, name_de,
+        osm_id*10, geometry, name, name_en, name_de,
         tags,
-        place::text AS class, "rank", capital
+        place::text AS class, "rank", capital,
+        NULL::text AS iso_a2
     FROM layer_city(bbox, zoom_level, pixel_width)
     ORDER BY "rank" ASC
 $$ LANGUAGE SQL IMMUTABLE;
@@ -2527,7 +2651,7 @@ CREATE OR REPLACE FUNCTION housenumber.flag() RETURNS trigger AS $$
 BEGIN
     INSERT INTO housenumber.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
     RETURN null;
-END;
+END;    
 $$ language plpgsql;
 
 CREATE OR REPLACE FUNCTION housenumber.refresh() RETURNS trigger AS
@@ -2552,7 +2676,7 @@ CREATE CONSTRAINT TRIGGER trigger_refresh
     FOR EACH ROW
     EXECUTE PROCEDURE housenumber.refresh();
 
--- etldoc: layer_housenumber[shape=record fillcolor=lightpink, style="rounded,filled",
+-- etldoc: layer_housenumber[shape=record fillcolor=lightpink, style="rounded,filled",  
 -- etldoc:     label="layer_housenumber | <z14_> z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_housenumber(bbox geometry, zoom_level integer)
@@ -2561,214 +2685,115 @@ RETURNS TABLE(osm_id bigint, geometry geometry, housenumber text) AS $$
     SELECT osm_id, geometry, housenumber FROM osm_housenumber_point
     WHERE zoom_level >= 14 AND geometry && bbox;
 $$ LANGUAGE SQL IMMUTABLE;
-DO $$ BEGIN RAISE NOTICE 'Layer poi'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_poi_polygon;
-DROP TRIGGER IF EXISTS trigger_refresh ON poi_polygon.updates;
+DO $$ BEGIN RAISE NOTICE 'Layer aerodrome_label'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_aerodrome_label_point;
+DROP TRIGGER IF EXISTS trigger_refresh ON aerodrome_label.updates;
 
--- etldoc:  osm_poi_polygon ->  osm_poi_polygon
-
-CREATE OR REPLACE FUNCTION update_poi_polygon() RETURNS VOID AS $$
+-- etldoc: osm_aerodrome_label_point -> osm_aerodrome_label_point
+CREATE OR REPLACE FUNCTION update_aerodrome_label_point() RETURNS VOID AS $$
 BEGIN
-  UPDATE osm_poi_polygon
-  SET geometry =
-           CASE WHEN ST_NPoints(ST_ConvexHull(geometry))=ST_NPoints(geometry)
-           THEN ST_Centroid(geometry)
-           ELSE ST_PointOnSurface(geometry)
-    END
+  UPDATE osm_aerodrome_label_point
+  SET geometry = ST_Centroid(geometry)
   WHERE ST_GeometryType(geometry) <> 'ST_Point';
 
-  UPDATE osm_poi_polygon
-  SET subclass = 'subway'
-  WHERE station = 'subway' and subclass='station';
-
-  UPDATE osm_poi_polygon
-  SET tags = tags || get_basic_names(tags, geometry)
+  UPDATE osm_aerodrome_label_point
+  SET tags = update_tags(tags, geometry)
   WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
-
-  ANALYZE osm_poi_polygon;
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT update_poi_polygon();
+SELECT update_aerodrome_label_point();
 
 -- Handle updates
 
-CREATE SCHEMA IF NOT EXISTS poi_polygon;
+CREATE SCHEMA IF NOT EXISTS aerodrome_label;
 
-CREATE TABLE IF NOT EXISTS poi_polygon.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION poi_polygon.flag() RETURNS trigger AS $$
+CREATE TABLE IF NOT EXISTS aerodrome_label.updates(id serial primary key, t text, unique (t));
+CREATE OR REPLACE FUNCTION aerodrome_label.flag() RETURNS trigger AS $$
 BEGIN
-    INSERT INTO poi_polygon.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
+    INSERT INTO aerodrome_label.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
     RETURN null;
 END;
 $$ language plpgsql;
 
-CREATE OR REPLACE FUNCTION poi_polygon.refresh() RETURNS trigger AS
+CREATE OR REPLACE FUNCTION aerodrome_label.refresh() RETURNS trigger AS
   $BODY$
   BEGIN
-    RAISE LOG 'Refresh poi_polygon';
-    PERFORM update_poi_polygon();
-    DELETE FROM poi_polygon.updates;
+    RAISE LOG 'Refresh aerodrome_label';
+    PERFORM update_aerodrome_label_point();
+    DELETE FROM aerodrome_label.updates;
     RETURN null;
   END;
   $BODY$
 language plpgsql;
 
 CREATE TRIGGER trigger_flag
-    AFTER INSERT OR UPDATE OR DELETE ON osm_poi_polygon
+    AFTER INSERT OR UPDATE OR DELETE ON osm_aerodrome_label_point
     FOR EACH STATEMENT
-    EXECUTE PROCEDURE poi_polygon.flag();
+    EXECUTE PROCEDURE aerodrome_label.flag();
 
 CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON poi_polygon.updates
+    AFTER INSERT ON aerodrome_label.updates
     INITIALLY DEFERRED
     FOR EACH ROW
-    EXECUTE PROCEDURE poi_polygon.refresh();
-DROP TRIGGER IF EXISTS trigger_flag ON osm_poi_point;
-DROP TRIGGER IF EXISTS trigger_refresh ON poi_point.updates;
+    EXECUTE PROCEDURE aerodrome_label.refresh();
 
--- etldoc:  osm_poi_point ->  osm_poi_point
-CREATE OR REPLACE FUNCTION update_osm_poi_point() RETURNS VOID AS $$
-BEGIN
-  UPDATE osm_poi_point
-    SET subclass = 'subway'
-    WHERE station = 'subway' and subclass='station';
+-- etldoc: layer_aerodrome_label[shape=record fillcolor=lightpink, style="rounded,filled", label="layer_aerodrome_label | <z10_> z10+" ] ;
 
-  UPDATE osm_poi_point
-  SET tags = tags || get_basic_names(tags, geometry)
-  WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
-
-END;
-$$ LANGUAGE plpgsql;
-
-SELECT update_osm_poi_point();
-
--- Handle updates
-
-CREATE SCHEMA IF NOT EXISTS poi_point;
-
-CREATE TABLE IF NOT EXISTS poi_point.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION poi_point.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO poi_point.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION poi_point.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh poi_point';
-    PERFORM update_osm_poi_point();
-    DELETE FROM poi_point.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag
-    AFTER INSERT OR UPDATE OR DELETE ON osm_poi_point
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE poi_point.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON poi_point.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE poi_point.refresh();
-CREATE OR REPLACE FUNCTION poi_class_rank(class TEXT)
-RETURNS INT AS $$
-    SELECT CASE class
-        WHEN 'hospital' THEN 20
-        WHEN 'park' THEN 25
-        WHEN 'cemetery' THEN 30
-        WHEN 'railway' THEN 40
-        WHEN 'bus' THEN 50
-        WHEN 'attraction' THEN 70
-        WHEN 'harbor' THEN 75
-        WHEN 'college' THEN 80
-        WHEN 'school' THEN 85
-        WHEN 'stadium' THEN 90
-        WHEN 'zoo' THEN 95
-        WHEN 'town_hall' THEN 100
-        WHEN 'campsite' THEN 110
-        WHEN 'cemetery' THEN 115
-        WHEN 'park' THEN 120
-        WHEN 'library' THEN 130
-        WHEN 'police' THEN 135
-        WHEN 'post' THEN 140
-        WHEN 'golf' THEN 150
-        WHEN 'shop' THEN 400
-        WHEN 'grocery' THEN 500
-        WHEN 'fast_food' THEN 600
-        WHEN 'clothing_store' THEN 700
-        WHEN 'bar' THEN 800
-        ELSE 1000
-    END;
-$$ LANGUAGE SQL IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION poi_class(subclass TEXT, mapping_key TEXT)
-RETURNS TEXT AS $$
-    SELECT CASE
-        WHEN subclass IN ('accessories','antiques','art','beauty','bed','boutique','camera','carpet','charity','chemist','chocolate','coffee','computer','confectionery','convenience','copyshop','cosmetics','garden_centre','doityourself','erotic','electronics','fabric','florist','furniture','video_games','video','general','gift','hardware','hearing_aids','hifi','ice_cream','interior_decoration','jewelry','kiosk','lamps','mall','massage','motorcycle','mobile_phone','newsagent','optician','outdoor','perfumery','perfume','pet','photo','second_hand','shoes','sports','stationery','tailor','tattoo','ticket','tobacco','toys','travel_agency','watches','weapons','wholesale') THEN 'shop'
-        WHEN subclass IN ('townhall','public_building','courthouse','community_centre') THEN 'town_hall'
-        WHEN subclass IN ('golf','golf_course','miniature_golf') THEN 'golf'
-        WHEN subclass IN ('fast_food','food_court') THEN 'fast_food'
-        WHEN subclass IN ('park','bbq') THEN 'park'
-        WHEN subclass IN ('bus_stop','bus_station') THEN 'bus'
-        -- because 'station' might be from both aeroway and railway
-        WHEN (subclass='station' AND mapping_key = 'railway') OR subclass IN ('halt', 'tram_stop', 'subway') THEN 'railway'
-        WHEN subclass IN ('camp_site','caravan_site') THEN 'campsite'
-        WHEN subclass IN ('laundry','dry_cleaning') THEN 'laundry'
-        WHEN subclass IN ('supermarket','deli','delicatessen','department_store','greengrocer','marketplace') THEN 'grocery'
-        WHEN subclass IN ('books','library') THEN 'library'
-        WHEN subclass IN ('university','college') THEN 'college'
-        WHEN subclass IN ('hotel','motel','bed_and_breakfast','guest_house','hostel','chalet','alpine_hut','camp_site') THEN 'lodging'
-        WHEN subclass IN ('chocolate','confectionery') THEN 'ice_cream'
-        WHEN subclass IN ('post_box','post_office') THEN 'post'
-        WHEN subclass IN ('cafe') THEN 'cafe'
-        WHEN subclass IN ('school','kindergarten') THEN 'school'
-        WHEN subclass IN ('alcohol','beverages','wine') THEN 'alcohol_shop'
-        WHEN subclass IN ('bar','nightclub') THEN 'bar'
-        WHEN subclass IN ('marina','dock') THEN 'harbor'
-        WHEN subclass IN ('car','car_repair','taxi') THEN 'car'
-        WHEN subclass IN ('hospital','nursing_home', 'doctors', 'clinic') THEN 'hospital'
-        WHEN subclass IN ('grave_yard','cemetery') THEN 'cemetery'
-        WHEN subclass IN ('attraction','viewpoint') THEN 'attraction'
-        WHEN subclass IN ('biergarten','pub') THEN 'beer'
-        WHEN subclass IN ('music','musical_instrument') THEN 'music'
-        WHEN subclass IN ('american_football','stadium','soccer','pitch') THEN 'stadium'
-        WHEN subclass IN ('accessories','antiques','art','artwork','gallery','arts_centre') THEN 'art_gallery'
-        WHEN subclass IN ('bag','clothes') THEN 'clothing_store'
-        WHEN subclass IN ('swimming_area','swimming') THEN 'swimming'
-        ELSE subclass
-    END;
-$$ LANGUAGE SQL IMMUTABLE;
-
--- etldoc: layer_poi[shape=record fillcolor=lightpink, style="rounded,filled",
--- etldoc:     label="layer_poi | <z14_> z14+" ] ;
-
-CREATE OR REPLACE FUNCTION layer_poi(bbox geometry, zoom_level integer, pixel_width numeric)
-RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de text, tags hstore, class text, subclass text, "rank" int) AS $$
-    SELECT osm_id, geometry, NULLIF(name, '') AS name,
+CREATE OR REPLACE FUNCTION layer_aerodrome_label(
+    bbox geometry,
+    zoom_level integer,
+    pixel_width numeric)
+  RETURNS TABLE(
+    osm_id bigint,
+    geometry geometry,
+    name text,
+    name_en text,
+    name_de text,
+    tags hstore,
+    class text,
+    iata text,
+    icao text,
+    ele int,
+    ele_ft int) AS
+$$
+  -- etldoc: osm_aerodrome_label_point -> layer_aerodrome_label:z10_
+  SELECT
+    osm_id,
+    geometry,
+    name,
     COALESCE(NULLIF(name_en, ''), name) AS name_en,
     COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
     tags,
-    poi_class(subclass, mapping_key) AS class, subclass,
-        row_number() OVER (
-            PARTITION BY LabelGrid(geometry, 100 * pixel_width)
-            ORDER BY CASE WHEN name = '' THEN 2000 ELSE poi_class_rank(poi_class(subclass, mapping_key)) END ASC
-        )::int AS "rank"
-    FROM (
-        -- etldoc: osm_poi_point ->  layer_poi:z14_
-        SELECT * FROM osm_poi_point
-            WHERE geometry && bbox
-                AND zoom_level >= 14
-        UNION ALL
-        -- etldoc: osm_poi_polygon ->  layer_poi:z14_
-        SELECT * FROM osm_poi_polygon
-            WHERE geometry && bbox
-                AND zoom_level >= 14
-        ) as poi_union
-    ORDER BY "rank"
-    ;
+    CASE
+      WHEN aerodrome = 'international'
+          OR aerodrome_type = 'international'
+        THEN 'international'
+      WHEN
+          aerodrome = 'public'
+          OR aerodrome_type LIKE '%public%'
+          OR aerodrome_type = 'civil'
+        THEN 'public'
+      WHEN
+          aerodrome = 'regional'
+          OR aerodrome_type = 'regional'
+        THEN 'regional'
+      WHEN
+          aerodrome = 'military'
+          OR aerodrome_type LIKE '%military%'
+          OR military = 'airfield'
+        THEN 'military'
+      WHEN
+          aerodrome = 'private'
+          OR aerodrome_type = 'private'
+        THEN 'private'
+      ELSE 'other'
+    END AS class,
+    NULLIF(iata, '') AS iata,
+    NULLIF(icao, '') AS icao,
+    substring(ele from E'^(-?\\d+)(\\D|$)')::int AS ele,
+    round(substring(ele from E'^(-?\\d+)(\\D|$)')::int*3.2808399)::int AS ele_ft
+  FROM osm_aerodrome_label_point
+  WHERE geometry && bbox AND zoom_level >= 10;
+
 $$ LANGUAGE SQL IMMUTABLE;
+
