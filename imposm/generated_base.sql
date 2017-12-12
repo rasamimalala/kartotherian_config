@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION slice_language_tags(tags hstore)
 RETURNS hstore AS $$
-    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name']))
+    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer water'; END$$;CREATE OR REPLACE FUNCTION water_class(waterway TEXT) RETURNS TEXT AS $$
     SELECT CASE WHEN waterway='' THEN 'lake' ELSE 'river' END;
@@ -1508,6 +1508,18 @@ indoor INT) AS $$
     WHERE geometry && bbox
     ORDER BY z_order ASC;
 $$ LANGUAGE SQL IMMUTABLE;
+
+
+CREATE OR REPLACE FUNCTION layer_transportation_lite(bbox geometry, zoom_level int)
+RETURNS TABLE(osm_id bigint, geometry geometry, class text, subclass text,
+ramp int, oneway int, brunnel TEXT, service TEXT, layer INT, level INT,
+indoor INT) AS $$
+    SELECT * FROM layer_transportation(bbox, zoom_level)
+        WHERE zoom_level < 13
+    UNION ALL
+    SELECT * FROM layer_transportation(bbox, 14)
+        WHERE zoom_level >= 13
+$$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer building'; END$$;-- etldoc: layer_building[shape=record fillcolor=lightpink, style="rounded,filled",
 -- etldoc:     label="layer_building | <z14_> z14+ " ] ;
 
@@ -2016,6 +2028,18 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
     ) AS zoom_levels
     WHERE geometry && bbox
     ORDER BY z_order ASC;
+$$ LANGUAGE SQL IMMUTABLE;
+
+
+CREATE OR REPLACE FUNCTION layer_transportation_name_lite(bbox geometry, zoom_level integer)
+RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
+  name_de text, tags hstore, ref text, ref_length int, network text, class
+  text, subclass text, layer INT, level INT, indoor INT) AS $$
+  SELECT * FROM layer_transportation_name(bbox, zoom_level)
+    WHERE zoom_level < 13
+  UNION ALL
+  SELECT * FROM layer_transportation_name(bbox, 14)
+    WHERE zoom_level >= 13
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer place'; END$$;DO $$
 BEGIN
@@ -2623,6 +2647,18 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
         NULL::text AS iso_a2
     FROM layer_city(bbox, zoom_level, pixel_width)
     ORDER BY "rank" ASC
+$$ LANGUAGE SQL IMMUTABLE;
+
+
+CREATE OR REPLACE FUNCTION layer_place_lite(bbox geometry, zoom_level int, pixel_width numeric)
+RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
+    name_de text, tags hstore, class text, "rank" int, capital INT, iso_a2
+        TEXT) AS $$
+    SELECT * FROM layer_place(bbox, zoom_level, pixel_width)
+        WHERE zoom_level < 13
+    UNION ALL
+    SELECT * FROM layer_place(bbox, 14, pixel_width)
+        WHERE zoom_level >= 13
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer housenumber'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_housenumber_point;
 DROP TRIGGER IF EXISTS trigger_refresh ON housenumber.updates;
