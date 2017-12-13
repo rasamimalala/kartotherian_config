@@ -34,6 +34,7 @@ MAX_INTERVAL=0  # 3600 for an hour
 STATE_SRV_URL=https://replicate-sequences.osm.mazdermind.de/
 PLANET_URL=http://planet.openstreetmap.org/replication
 CHANGE_FILE=changes.osc.gz
+BOUNDING_BOX=""
 
 # Internal
 W_DIR=/data/osmosis
@@ -46,7 +47,7 @@ OSMOSIS=/usr/bin/osmosis
 STOP_FILE=${W_DIR}/stop
 
 # imposm
-IMPOSM_CONFIG_DIR="/etc/imposm" # default value for the config file. can be set with the --config option
+IMPOSM_CONFIG_DIR="/etc/imposm" # default value, can be set with the --config option
 
 # base tiles
 BASE_IMPOSM_CONFIG_FILENAME="config_base.json"
@@ -80,6 +81,10 @@ usage () {
 	echo "        Osmosis working directory"
 	echo
 	echo "    --config, -c     <path to a imposm config file> [default: /etc/imposm]"
+	echo
+	echo "    --bounding-box   <optional bounding box that will passed to osmosis>"
+	echo "        the bbox must be passed as a single string in the osmosis format"
+	echo "        Exemple: --bounding-box \"top=49.5138 left=10.9351 bottom=49.3866 right=11.201\""
 	echo
 	echo "    --help, -h"
 	echo "        display help and version"
@@ -193,7 +198,7 @@ find ${LOG_DIR} -name "*.log" -mtime +$LOG_MAXDAYS -delete
 
 
 OPTIONS=ctho
-LONGOPTIONS=config:,tilerator:,help,osm:
+LONGOPTIONS=config:,tilerator:,help,osm:,bounding-box:
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -215,6 +220,10 @@ while true; do
             ;;
         -o|--osm)
             OSM_FILE="$2"
+            shift 2
+            ;;
+        --bounding-box)
+            BOUNDING_BOX="$2"
             shift 2
             ;;
         --)
@@ -299,7 +308,15 @@ log "generate changes file into ${TMP_DIR}/${CHANGE_FILE}"
 log "backup of state file"
 cp ${W_DIR}/state.txt ${W_DIR}/.state.txt
 
+
+if [ ! -z "$BOUNDING_BOX" ]; then
+	BOUNDING_BOX_OPTION="--bounding-box $BOUNDING_BOX"
+else
+	BOUNDING_BOX_OPTION=""
+fi
+
 if ! $OSMOSIS --read-replication-interval workingDirectory=${W_DIR} \
+	$BOUNDING_BOX_OPTION \
 	--simplify-change --write-xml-change \
 	${TMP_DIR}/${CHANGE_FILE} &>> $LOG_FILE ; then
 
