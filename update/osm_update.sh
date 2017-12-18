@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -x
 
 description="OpenStreetMap database update script"
 version="0.1/20171009"
@@ -56,7 +57,7 @@ BASE_TILERATOR_STORAGE=basemap
 
 # poi tiles
 POI_IMPOSM_CONFIG_FILENAME="config_poi.json"
-POI_TILERATOR_GENERATOR="gen-poi"
+POI_TILERATOR_GENERATOR="gen_poi"
 POI_TILERATOR_STORAGE="poi"
 
 #tilerator
@@ -133,7 +134,7 @@ free_lock () {
 
 
 run_imposm_update() {
-    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$0"
+    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
     log "apply changes on OSM database"
     log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' -f 1)"
 
@@ -144,9 +145,9 @@ run_imposm_update() {
 
 
 create_tiles_jobs() {
-    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$0"
-    local TILERATOR_GENERATOR=$1
-    local TILERATOR_STORAGE=$2
+    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
+    local TILERATOR_GENERATOR=$2
+    local TILERATOR_STORAGE=$3
 
     log "Creating tiles jobs for $IMPOSM_CONFIG_FILE"
 
@@ -160,23 +161,23 @@ create_tiles_jobs() {
     log "file with tile to regenerate = $EXPIRE_TILES_FILE"
 
     curl_log=$(curl --fail -s --noproxy localhost -XPOST "$TILERATOR_URL/add?"\
-        "generatorId=$TILERATOR_GENERATOR"\
-        "&storageId=$TILERATOR_STORAGE"\
-        "&zoom=$FROM_ZOOM"\
-        "&fromZoom=$FROM_ZOOM"\
-        "&beforeZoom=$BEFORE_ZOOM"\
-        "&keepJob=true"\
-        "&parts=40"\
-        "&deleteEmpty=true"\
-        "&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
+"generatorId=$TILERATOR_GENERATOR"\
+"&storageId=$TILERATOR_STORAGE"\
+"&zoom=$FROM_ZOOM"\
+"&fromZoom=$FROM_ZOOM"\
+"&beforeZoom=$BEFORE_ZOOM"\
+"&keepJob=true"\
+"&parts=40"\
+"&deleteEmpty=true"\
+"&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
 
-    if [ -z ${curl_log} ]; then
+    if [ -z "${curl_log}" ]; then
         log_error "curl fail"
     fi
 
     # tilerator return a 200 even if it fails...
     ERRORS=$(echo $curl_log | jq ".error")
-    if ! [ -z "$ERRORS" ]; then
+    if [ "$ERRORS" != "null" ]; then
         log_error "tilerator fail: $ERRORS"
     fi
 
