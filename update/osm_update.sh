@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -x
 
 description="OpenStreetMap database update script"
 version="0.1/20171009"
@@ -34,6 +35,7 @@ MAX_INTERVAL=0  # 3600 for an hour
 STATE_SRV_URL=https://replicate-sequences.osm.mazdermind.de/
 PLANET_URL=http://planet.openstreetmap.org/replication
 CHANGE_FILE=changes.osc.gz
+BOUNDING_BOX=""
 
 # Internal
 W_DIR=/data/osmosis
@@ -46,15 +48,23 @@ OSMOSIS=/usr/bin/osmosis
 STOP_FILE=${W_DIR}/stop
 
 # imposm
-IMPOSM_CONFIG_FILE=/data/imposm/diff/config.json  # default value for the config file. can be set with the --config option
+IMPOSM_CONFIG_DIR="/etc/imposm" # default value, can be set with the --config option
+
+# base tiles
+BASE_IMPOSM_CONFIG_FILENAME="config_base.json"
+BASE_TILERATOR_GENERATOR=substbasemap
+BASE_TILERATOR_STORAGE=basemap
+
+# poi tiles
+POI_IMPOSM_CONFIG_FILENAME="config_poi.json"
+POI_TILERATOR_GENERATOR="gen_poi"
+POI_TILERATOR_STORAGE="poi"
 
 #tilerator
 TILERATOR_URL=http://localhost:16534
 FROM_ZOOM=11
 BEFORE_ZOOM=15 # exclusive
-EXPIRE_TILES_DIRECTORY=/data/imposm/expiretiles
-TILERATOR_GENERATOR=substbasemap
-TILERATOR_STORAGE=basemap
+
 # ----------------------------------------------------------------------------
 
 usage () {
@@ -71,7 +81,11 @@ usage () {
 	echo "        apply diffs on OSM database based on a already initialized"
 	echo "        Osmosis working directory"
 	echo
-	echo "    --config, -c     <path to a imposm config file> [default: /data/imposm/diff/config.json]"
+	echo "    --config, -c     <path to a imposm config file> [default: /etc/imposm]"
+	echo
+	echo "    --bounding-box   <optional bounding box that will passed to osmosis>"
+	echo "        the bbox must be passed as a single string in the osmosis format"
+	echo "        Exemple: --bounding-box \"top=49.5138 left=10.9351 bottom=49.3866 right=11.201\""
 	echo
 	echo "    --help, -h"
 	echo "        display help and version"
@@ -118,6 +132,57 @@ free_lock () {
 	rm $LOCK_FILE
 }
 
+
+run_imposm_update() {
+    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
+    log "apply changes on OSM database"
+    log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' -f 1)"
+
+    if ! imposm3 diff -config $IMPOSM_CONFIG_FILE ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
+        log_error "imposm3 failed"
+    fi
+}
+
+
+create_tiles_jobs() {
+    local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
+    local TILERATOR_GENERATOR=$2
+    local TILERATOR_STORAGE=$3
+
+    log "Creating tiles jobs for $IMPOSM_CONFIG_FILE"
+
+    # tilerator takes a list a file separated by a pipe
+    function concat_with_pipe { local IFS="|"; echo "$*";}
+
+    # we load all the tiles generated this day
+    local EXPIRE_TILES_DIRECTORY=$(jq -r .expiretiles_dir $IMPOSM_CONFIG_FILE)
+    EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
+
+    log "file with tile to regenerate = $EXPIRE_TILES_FILE"
+
+    curl_log=$(curl --fail -s --noproxy localhost -XPOST "$TILERATOR_URL/add?"\
+"generatorId=$TILERATOR_GENERATOR"\
+"&storageId=$TILERATOR_STORAGE"\
+"&zoom=$FROM_ZOOM"\
+"&fromZoom=$FROM_ZOOM"\
+"&beforeZoom=$BEFORE_ZOOM"\
+"&keepJob=true"\
+"&parts=40"\
+"&deleteEmpty=true"\
+"&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
+
+    if [ -z "${curl_log}" ]; then
+        log_error "curl fail"
+    fi
+
+    # tilerator return a 200 even if it fails...
+    ERRORS=$(echo $curl_log | jq ".error")
+    if [ "$ERRORS" != "null" ]; then
+        log_error "tilerator fail: $ERRORS"
+    fi
+
+}
+
 # ----------------------------------------------------------------------------
 
 
@@ -134,7 +199,7 @@ find ${LOG_DIR} -name "*.log" -mtime +$LOG_MAXDAYS -delete
 
 
 OPTIONS=ctho
-LONGOPTIONS=config:,tilerator:,help,osm:
+LONGOPTIONS=config:,tilerator:,help,osm:,bounding-box:
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -147,7 +212,7 @@ eval set -- "$PARSED"
 while true; do
     case "$1" in
         -c|--config)
-            IMPOSM_CONFIG_FILE="$2"
+            IMPOSM_CONFIG_DIR="$2"
             shift 2
             ;;
         -h|--help)
@@ -156,6 +221,10 @@ while true; do
             ;;
         -o|--osm)
             OSM_FILE="$2"
+            shift 2
+            ;;
+        --bounding-box)
+            BOUNDING_BOX="$2"
             shift 2
             ;;
         --)
@@ -220,7 +289,7 @@ if [ $INIT_MODE = true ]; then
 
 	log "generate initial state file with date: ${TIMESTAMP_START}"
 	# state.txt is the default name for osmosis
-	wget -q --no-check-certificate \
+	wget -q \
 		"${STATE_SRV_URL}?${TIMESTAMP_START}&stream=${FREQUENCY}" \
 		-O ${W_DIR}/state.txt
 
@@ -240,50 +309,33 @@ log "generate changes file into ${TMP_DIR}/${CHANGE_FILE}"
 log "backup of state file"
 cp ${W_DIR}/state.txt ${W_DIR}/.state.txt
 
+
+if [ ! -z "$BOUNDING_BOX" ]; then
+	BOUNDING_BOX_OPTION="--bounding-box $BOUNDING_BOX"
+else
+	BOUNDING_BOX_OPTION=""
+fi
+
 if ! $OSMOSIS --read-replication-interval workingDirectory=${W_DIR} \
+	$BOUNDING_BOX_OPTION \
 	--simplify-change --write-xml-change \
 	${TMP_DIR}/${CHANGE_FILE} &>> $LOG_FILE ; then
 
 	log_error "osmosis failed"
 fi
 
-log "apply changes on OSM database"
-log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' -f 1)"
 
-if ! imposm3 diff -config $IMPOSM_CONFIG_FILE ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
+# Imposm update for both tiles sources
+run_imposm_update $BASE_IMPOSM_CONFIG_FILENAME
+run_imposm_update $POI_IMPOSM_CONFIG_FILENAME
 
-    log_error "imposm3 failed"
-fi
 
-log "generating tiles"
+# Create tiles jobs for both tiles sources
+create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME $BASE_TILERATOR_GENERATOR $BASE_TILERATOR_STORAGE
+create_tiles_jobs $POI_IMPOSM_CONFIG_FILENAME $POI_TILERATOR_GENERATOR $POI_TILERATOR_STORAGE
 
-# tilerator takes a list a file separated by a pipe
-function concat_with_pipe { local IFS="|"; echo "$*";}
-# we load all the tiles generated this day
-EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
-
-log "file with tile to regenerate = $EXPIRE_TILES_FILE"
-
-curl_log=$(curl --fail -s --noproxy localhost -XPOST "$TILERATOR_URL/add?"\
-"generatorId=$TILERATOR_GENERATOR"\
-"&storageId=$TILERATOR_STORAGE"\
-"&zoom=$FROM_ZOOM"\
-"&fromZoom=$FROM_ZOOM"\
-"&beforeZoom=$BEFORE_ZOOM"\
-"&keepJob=true"\
-"&parts=40"\
-"&deleteEmpty=true"\
-"&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
-
-if [ -z ${curl_log} ]; then
-	log_error "curl fail"
-fi
-
-# tilerator return a 200 even if it fails...
-ERRORS=$(echo $curl_log | jq ".error")
-if ! [ -z "$ERRORS" ]; then
-	log_error "tilerator fail: $ERRORS"
-fi
+# Uncomment next line to enable lite tiles generation, using base database :
+# create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME "ozgen-lite" "v2-lite"
 
 free_lock
 
