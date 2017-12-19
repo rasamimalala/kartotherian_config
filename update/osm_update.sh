@@ -324,18 +324,22 @@ if ! $OSMOSIS --read-replication-interval workingDirectory=${W_DIR} \
 	log_error "osmosis failed"
 fi
 
+# Update db and tiles, only if changes file is not empty
+if [ -s ${TMP_DIR}/${CHANGE_FILE} ]; then
+	# Imposm update for both tiles sources
+	run_imposm_update $BASE_IMPOSM_CONFIG_FILENAME
+	run_imposm_update $POI_IMPOSM_CONFIG_FILENAME
 
-# Imposm update for both tiles sources
-run_imposm_update $BASE_IMPOSM_CONFIG_FILENAME
-run_imposm_update $POI_IMPOSM_CONFIG_FILENAME
 
+	# Create tiles jobs for both tiles sources
+	create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME $BASE_TILERATOR_GENERATOR $BASE_TILERATOR_STORAGE
+	create_tiles_jobs $POI_IMPOSM_CONFIG_FILENAME $POI_TILERATOR_GENERATOR $POI_TILERATOR_STORAGE
 
-# Create tiles jobs for both tiles sources
-create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME $BASE_TILERATOR_GENERATOR $BASE_TILERATOR_STORAGE
-create_tiles_jobs $POI_IMPOSM_CONFIG_FILENAME $POI_TILERATOR_GENERATOR $POI_TILERATOR_STORAGE
-
-# Uncomment next line to enable lite tiles generation, using base database :
-# create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME "ozgen-lite" "v2-lite"
+	# Uncomment next line to enable lite tiles generation, using base database :
+	# create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME "ozgen-lite" "v2-lite"
+else
+	log "Changes file is empty. Nothing to update."
+fi
 
 free_lock
 
