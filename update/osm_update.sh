@@ -169,7 +169,7 @@ create_tiles_jobs() {
 "&keepJob=true"\
 "&parts=40"\
 "&deleteEmpty=true"\
-"&filepath=$EXPIRE_TILES_FILE" | tee $LOG_FILE)
+"&filepath=$EXPIRE_TILES_FILE" | tee -a $LOG_FILE)
 
     if [ -z "${curl_log}" ]; then
         log_error "curl fail"
