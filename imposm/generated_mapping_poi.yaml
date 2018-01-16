@@ -97,4 +97,4 @@ tags:
     'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn',
     'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name,
     wikidata, wikipedia]
-
+  load_all: true
