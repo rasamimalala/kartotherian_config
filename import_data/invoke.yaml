@@ -1,0 +1,10 @@
+pg:
+  user: gis
+  database: gis
+  host: postgres
+  password: postgres
+  port: 5432
+main_dir: /srv/import_data
+sql_dir: /srv/import_data/sql
+data_dir: /data
+osm_file: 
