@@ -59,7 +59,7 @@ def import_natural_earth(ctx):
         && unzip -oj natural_earth_vector.sqlite.zip -d {ctx.data_dir} \
         && rm natural_earth_vector.sqlite.zip")
 
-    pg_conn = f'dbname={ctx.pg.database} user={ctx.pg.user} host={ctx.pg.host}'
+    pg_conn = f'dbname={ctx.pg.database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}'
     ctx.run(f'PGCLIENTENCODING=LATIN1 ogr2ogr \
     -progress \
     -f Postgresql \
@@ -103,7 +103,7 @@ def import_lake(ctx):
     if not os.path.isfile(target_file):
         ctx.run(f"wget --quiet -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson")
 
-    pg_conn = f'dbname={ctx.pg.database} user={ctx.pg.user} host={ctx.pg.host}'
+    pg_conn = f'dbname={ctx.pg.database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}'
     ctx.run(f'PGCLIENTENCODING=UTF8 ogr2ogr \
     -f Postgresql \
     -s_srs EPSG:4326 \
