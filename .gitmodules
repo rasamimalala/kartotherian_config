@@ -1,0 +1,12 @@
+[submodule "external_dependencies/import-osmborder"]
+	path = external_dependencies/import-osmborder
+	url = https://github.com/openmaptiles/import-osmborder.git
+[submodule "external_dependencies/import-water"]
+	path = external_dependencies/import-water
+	url = https://github.com/openmaptiles/import-water.git
+[submodule "external_dependencies/import-sql"]
+	path = external_dependencies/import-sql
+	url = https://github.com/openmaptiles/import-sql.git
+[submodule "external_dependencies/postgis-vt-util"]
+	path = external_dependencies/postgis-vt-util
+	url = https://github.com/mapbox/postgis-vt-util.git
