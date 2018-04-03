@@ -33,7 +33,7 @@ version="0.1/20171009"
 FREQUENCY=day # from minute|hour|day
 MAX_INTERVAL=0  # 3600 for an hour
 STATE_SRV_URL=https://replicate-sequences.osm.mazdermind.de/
-PLANET_URL=http://planet.openstreetmap.org/replication
+PLANET_URL=https://planet.openstreetmap.org/replication
 CHANGE_FILE=changes.osc.gz
 BOUNDING_BOX=""
 
