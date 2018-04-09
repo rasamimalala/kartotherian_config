@@ -84,16 +84,6 @@ def import_water_polygon(ctx):
     && unzip -oj water-polygons-split-3857.zip -d {ctx.data_dir} \
     && rm water-polygons-split-3857.zip")
 
-
-    ### Simplified water polygons are no longer
-    ### used by omt "import_water.sh"
-
-    # target_simplified_file = f"{ctx.data_dir}/simplified_water_polygons.shp"
-    # if not os.path.isfile(target_simplified_file):
-    #     ctx.run(f"wget --quiet http://data.openstreetmapdata.com/simplified-water-polygons-complete-3857.zip \
-    # && unzip -oj simplified-water-polygons-complete-3857.zip -d {ctx.data_dir} \
-    # && rm simplified-water-polygons-complete-3857.zip")
-
     ctx.run(f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DATA_DIR={ctx.data_dir} \
   POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.database} POSTGRES_USER={ctx.pg.user} \
   {ctx.main_dir}/import-water.sh")
