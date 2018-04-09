@@ -36,6 +36,7 @@ basemap:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    setLastModified: true
 
 ozbasemap:
   public: true
@@ -61,6 +62,7 @@ poi:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    setLastModified: true
 
 ozpoi:
   public: true
