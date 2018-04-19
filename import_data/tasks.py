@@ -1,5 +1,3 @@
-
-
 import logging
 import invoke
 from invoke import task
@@ -16,7 +14,7 @@ def load_basemap(ctx):
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff -cachedir {ctx.main_dir}/imposm/cache')
+  -diffdir {ctx.main_dir}/imposm/diff/base -cachedir {ctx.main_dir}/imposm/cache/base')
 
 
 @task
@@ -29,7 +27,7 @@ def load_poi(ctx):
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff -cachedir {ctx.main_dir}/imposm/cache')
+  -diffdir {ctx.main_dir}/imposm/diff/poi -cachedir {ctx.main_dir}/imposm/cache/poi')
 
 
 def _run_sql_script(ctx, script_name):
