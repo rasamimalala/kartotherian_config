@@ -1,5 +1,3 @@
-
-
 import logging
 import invoke
 from invoke import task
@@ -16,7 +14,7 @@ def load_basemap(ctx):
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff -cachedir {ctx.main_dir}/imposm/cache')
+  -diffdir {ctx.main_dir}/imposm/diff/base -cachedir {ctx.main_dir}/imposm/cache/base')
 
 
 @task
@@ -29,7 +27,7 @@ def load_poi(ctx):
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff -cachedir {ctx.main_dir}/imposm/cache')
+  -diffdir {ctx.main_dir}/imposm/diff/poi -cachedir {ctx.main_dir}/imposm/cache/poi')
 
 
 def _run_sql_script(ctx, script_name):
@@ -55,7 +53,7 @@ def import_natural_earth(ctx):
     target_file = f"{ctx.data_dir}/natural_earth_vector.sqlite"
 
     if not os.path.isfile(target_file):
-        ctx.run(f"wget --quiet http://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip \
+        ctx.run(f"wget --progress=dot:giga http://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip \
         && unzip -oj natural_earth_vector.sqlite.zip -d {ctx.data_dir} \
         && rm natural_earth_vector.sqlite.zip")
 
@@ -80,7 +78,7 @@ def import_water_polygon(ctx):
 
     target_file = f"{ctx.data_dir}/water_polygons.shp"
     if not os.path.isfile(target_file):
-        ctx.run(f"wget --quiet http://data.openstreetmapdata.com/water-polygons-split-3857.zip \
+        ctx.run(f"wget --progress=dot:giga http://data.openstreetmapdata.com/water-polygons-split-3857.zip \
     && unzip -oj water-polygons-split-3857.zip -d {ctx.data_dir} \
     && rm water-polygons-split-3857.zip")
 
@@ -95,7 +93,7 @@ def import_lake(ctx):
 
     target_file = f"{ctx.data_dir}/lake_centerline.geojson"
     if not os.path.isfile(target_file):
-        ctx.run(f"wget --quiet -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson")
+        ctx.run(f"wget --progress=dot:giga -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson")
 
     pg_conn = f'dbname={ctx.pg.database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}'
     ctx.run(f'PGCLIENTENCODING=UTF8 ogr2ogr \
@@ -114,7 +112,7 @@ def import_border(ctx):
 
     target_file = f"{ctx.data_dir}/osmborder_lines.csv"
     if not os.path.isfile(target_file):
-        ctx.run(f"wget -P {ctx.data_dir} https://github.com/openmaptiles/import-osmborder/releases/download/v0.4/osmborder_lines.csv.gz \
+        ctx.run(f"wget --progress=dot:giga -P {ctx.data_dir} https://github.com/openmaptiles/import-osmborder/releases/download/v0.4/osmborder_lines.csv.gz \
     && gzip -d {ctx.data_dir}/osmborder_lines.csv.gz")
 
     ctx.run(f'POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DIR={ctx.data_dir} \
