@@ -2,7 +2,7 @@ pg:
   user: gis
   database: gis
   host: postgres
-  password: postgres
+  password: gis
   port: 5432
 main_dir: /srv/import_data
 sql_dir: /srv/import_data/sql

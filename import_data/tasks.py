@@ -8,7 +8,7 @@ import os.path
 def load_basemap(ctx):
     ctx.run(f'time imposm3 \
   import \
-  -write --connection "postgis://{ctx.pg.user}@{ctx.pg.host}/{ctx.pg.database}" \
+  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
   -read {ctx.osm_file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
@@ -21,7 +21,7 @@ def load_basemap(ctx):
 def load_poi(ctx):
     ctx.run(f'time imposm3 \
   import \
-  -write --connection "postgis://{ctx.pg.user}@{ctx.pg.host}/{ctx.pg.database}" \
+  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
   -read {ctx.osm_file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
