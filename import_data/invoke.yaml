@@ -6,5 +6,6 @@ pg:
   port: 5432
 main_dir: /srv/import_data
 sql_dir: /srv/import_data/sql
+generated_files_dir: /data/imposm
 data_dir: /data
 osm_file: 

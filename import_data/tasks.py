@@ -14,7 +14,7 @@ def load_basemap(ctx):
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff/base -cachedir {ctx.main_dir}/imposm/cache/base')
+  -diffdir {ctx.generated_files_dir}/diff/base -cachedir {ctx.generated_files_dir}/cache/base')
 
 
 @task
@@ -27,7 +27,7 @@ def load_poi(ctx):
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.main_dir}/imposm/diff/poi -cachedir {ctx.main_dir}/imposm/cache/poi')
+  -diffdir {ctx.generated_files_dir}/diff/poi -cachedir {ctx.generated_files_dir}/cache/poi')
 
 
 def _run_sql_script(ctx, script_name):
