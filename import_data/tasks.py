@@ -31,7 +31,8 @@ def load_poi(ctx):
 
 
 def _run_sql_script(ctx, script_name):
-    ctx.run(f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} --set ON_ERROR_STOP='1' -f {ctx.sql_dir}/{script_name}")
+    ctx.run(f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} --set ON_ERROR_STOP='1' -f {ctx.sql_dir}/{script_name}",
+           env={'PGPASSWORD': ctx.pg.password})
 
 
 @task
