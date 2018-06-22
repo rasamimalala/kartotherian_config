@@ -40,13 +40,6 @@ def run_sql_script(ctx):
     # load several psql functions
     _run_sql_script(ctx, "language.sql")
     _run_sql_script(ctx, "postgis-vt-util.sql")
-    # localization sql function
-    _run_sql_script(ctx, "get_localized_name.sql")
-    _run_sql_script(ctx, "get_localized_name_from_tags.sql")
-    _run_sql_script(ctx, "get_country.sql")
-    _run_sql_script(ctx, "get_country_name.sql")
-    _run_sql_script(ctx, "geo_transliterate.sql")
-
 
 @task
 def import_natural_earth(ctx):
@@ -128,8 +121,8 @@ def import_wikidata(ctx):
 
     For the moment this does nothing (but we need a table for some openmaptiles function)
     """
-    create_table = "CREATE TABLE IF NOT EXISTS wd_names (id          varchar(20) UNIQUE, page          varchar(200) UNIQUE,    labels      hstore);"
-    ctx.run(f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} {create_table}",
+    create_table = "CREATE TABLE IF NOT EXISTS wd_names (id varchar(20) UNIQUE, page varchar(200) UNIQUE, labels hstore);"
+    ctx.run(f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} -c "{create_table}"',
             env={'PGPASSWORD': ctx.pg.password})
 
 
