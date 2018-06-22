@@ -122,6 +122,18 @@ def import_border(ctx):
 
 
 @task
+def import_wikidata(ctx):
+    """
+    import wikidata (for some translations)
+
+    For the moment this does nothing (but we need a table for some openmaptiles function)
+    """
+    create_table = "CREATE TABLE IF NOT EXISTS wd_names (id          varchar(20) UNIQUE, page          varchar(200) UNIQUE,    labels      hstore);"
+    ctx.run(f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} {create_table}",
+            env={'PGPASSWORD': ctx.pg.password})
+
+
+@task
 def run_post_sql_scripts(ctx):
     """
     load the sql file with all the functions to generate the layers
@@ -145,6 +157,7 @@ def load_additional_data(ctx):
     import_water_polygon(ctx)
     import_lake(ctx)
     import_border(ctx)
+    import_wikidata(ctx)
 
 
 @task(default=True)
