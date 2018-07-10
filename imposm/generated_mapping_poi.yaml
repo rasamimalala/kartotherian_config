@@ -14,6 +14,7 @@ tables:
     - {key: funicular, name: funicular, type: string}
     - {key: information, name: information, type: string}
     - {key: uic_ref, name: uic_ref, type: string}
+    - {key: religion, name: religion, type: string}
     mapping:
       aerialway: &id001 [station]
       amenity: &id002 [arts_centre, bank, bar, bbq, bicycle_rental, biergarten, bus_station,
@@ -28,21 +29,21 @@ tables:
       highway: &id004 [bus_stop]
       historic: &id005 [monument, castle, ruins]
       landuse: &id006 [basin, brownfield, cemetery, reservoir]
-      leisure: &id007 [dog_park, garden, golf_course, ice_rink, marina, miniature_golf,
-        park, pitch, playground, sports_centre, stadium, swimming_area, swimming_pool,
-        water_park]
-      railway: &id008 [station, halt, tram_stop]
+      leisure: &id007 [dog_park, escape_game, garden, golf_course, ice_rink, hackerspace,
+        marina, miniature_golf, park, pitch, playground, sports_centre, stadium, swimming_area,
+        swimming_pool, water_park]
+      railway: &id008 [halt, station, subway_entrance, train_station_entrance, tram_stop]
       shop: &id009 [accessories, alcohol, antiques, art, bag, bakery, beauty, bed,
         beverages, bicycle, books, boutique, butcher, camera, car, car_repair, carpet,
         charity, chemist, chocolate, clothes, coffee, computer, confectionery, convenience,
         copyshop, cosmetics, deli, delicatessen, department_store, doityourself, dry_cleaning,
-        electronics, erotic, fabric, florist, furniture, garden_centre, general, gift,
-        greengrocer, hairdresser, hardware, hearing_aids, hifi, ice_cream, interior_decoration,
-        jewelry, kiosk, lamps, laundry, mall, massage, mobile_phone, motorcycle, music,
-        musical_instrument, newsagent, optician, outdoor, perfume, perfumery, pet,
-        photo, second_hand, shoes, sports, stationery, supermarket, tailor, tattoo,
-        ticket, tobacco, toys, travel_agency, video, video_games, watches, weapons,
-        wholesale, wine]
+        electronics, erotic, fabric, florist, frozen_food, furniture, garden_centre,
+        general, gift, greengrocer, hairdresser, hardware, hearing_aids, hifi, ice_cream,
+        interior_decoration, jewelry, kiosk, lamps, laundry, mall, massage, mobile_phone,
+        motorcycle, music, musical_instrument, newsagent, optician, outdoor, perfume,
+        perfumery, pet, photo, second_hand, shoes, sports, stationery, supermarket,
+        tailor, tattoo, ticket, tobacco, toys, travel_agency, video, video_games,
+        watches, weapons, wholesale, wine]
       sport: &id010 [american_football, archery, athletics, australian_football, badminton,
         baseball, basketball, beachvolleyball, billiards, bmx, boules, bowls, boxing,
         canadian_football, canoe, chess, climbing, climbing_adventure, cricket, cricket_nets,
@@ -73,6 +74,7 @@ tables:
     - {key: funicular, name: funicular, type: string}
     - {key: information, name: information, type: string}
     - {key: uic_ref, name: uic_ref, type: string}
+    - {key: religion, name: religion, type: string}
     mapping:
       aerialway: *id001
       amenity: *id002
@@ -95,8 +97,7 @@ tags:
     'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb',
     'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt',
     'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn',
-    'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name,
-    wikidata, wikipedia]
+    'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name]
   load_all: true
 
 use_single_id_space: true

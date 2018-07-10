@@ -50,7 +50,7 @@
        <Parameter name="password"><![CDATA[nice_password]]></Parameter>
        <Parameter name="port"><![CDATA[5432]]></Parameter>
        <Parameter name="srid"><![CDATA[900913]]></Parameter>
-       <Parameter name="table"><![CDATA[(SELECT geometry, name, name_en, name_de, NULLIF(tags->'name_int', '') AS "name_int", NULLIF(tags->'name:latin', '') AS "name:latin", NULLIF(tags->'name:nonlatin', '') AS "name:nonlatin", class FROM layer_waterway(!bbox!, z(!scale_denominator!))) AS t]]></Parameter>
+       <Parameter name="table"><![CDATA[(SELECT geometry, name, name_en, name_de, NULLIF(tags->'name_int', '') AS "name_int", NULLIF(tags->'name:latin', '') AS "name:latin", NULLIF(tags->'name:nonlatin', '') AS "name:nonlatin", class, brunnel FROM layer_waterway(!bbox!, z(!scale_denominator!))) AS t]]></Parameter>
        <Parameter name="type"><![CDATA[postgis]]></Parameter>
        <Parameter name="user"><![CDATA[nice_user]]></Parameter>
     </Datasource>

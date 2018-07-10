@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION slice_language_tags(tags hstore)
 RETURNS hstore AS $$
-    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
+    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name']))
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer poi'; END$$;DO $$
 BEGIN
@@ -166,8 +166,6 @@ CREATE OR REPLACE FUNCTION poi_class_rank(class TEXT)
 RETURNS INT AS $$
     SELECT CASE class
         WHEN 'hospital' THEN 20
-        WHEN 'park' THEN 25
-        WHEN 'cemetery' THEN 30
         WHEN 'railway' THEN 40
         WHEN 'bus' THEN 50
         WHEN 'attraction' THEN 70
@@ -196,7 +194,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 CREATE OR REPLACE FUNCTION poi_class(subclass TEXT, mapping_key TEXT)
 RETURNS TEXT AS $$
     SELECT CASE
-        WHEN subclass IN ('accessories','antiques','art','beauty','bed','boutique','camera','carpet','charity','chemist','chocolate','coffee','computer','confectionery','convenience','copyshop','cosmetics','garden_centre','doityourself','erotic','electronics','fabric','florist','furniture','video_games','video','general','gift','hardware','hearing_aids','hifi','ice_cream','interior_decoration','jewelry','kiosk','lamps','mall','massage','motorcycle','mobile_phone','newsagent','optician','outdoor','perfumery','perfume','pet','photo','second_hand','shoes','sports','stationery','tailor','tattoo','ticket','tobacco','toys','travel_agency','watches','weapons','wholesale') THEN 'shop'
+        WHEN subclass IN ('accessories','antiques','beauty','bed','boutique','camera','carpet','charity','chemist','chocolate','coffee','computer','confectionery','convenience','copyshop','cosmetics','garden_centre','doityourself','erotic','electronics','fabric','florist','frozen_food','furniture','video_games','video','general','gift','hardware','hearing_aids','hifi','ice_cream','interior_decoration','jewelry','kiosk','lamps','mall','massage','motorcycle','mobile_phone','newsagent','optician','outdoor','perfumery','perfume','pet','photo','second_hand','shoes','sports','stationery','tailor','tattoo','ticket','tobacco','toys','travel_agency','watches','weapons','wholesale') THEN 'shop'
         WHEN subclass IN ('townhall','public_building','courthouse','community_centre') THEN 'town_hall'
         WHEN subclass IN ('golf','golf_course','miniature_golf') THEN 'golf'
         WHEN subclass IN ('fast_food','food_court') THEN 'fast_food'
@@ -204,6 +202,7 @@ RETURNS TEXT AS $$
         WHEN subclass IN ('bus_stop','bus_station') THEN 'bus'
         WHEN (subclass='station' AND mapping_key = 'railway') OR subclass IN ('halt', 'tram_stop', 'subway') THEN 'railway'
         WHEN (subclass='station' AND mapping_key = 'aerialway') THEN 'aerialway'
+        WHEN subclass IN ('subway_entrance','train_station_entrance') THEN 'entrance'
         WHEN subclass IN ('camp_site','caravan_site') THEN 'campsite'
         WHEN subclass IN ('laundry','dry_cleaning') THEN 'laundry'
         WHEN subclass IN ('supermarket','deli','delicatessen','department_store','greengrocer','marketplace') THEN 'grocery'
@@ -218,13 +217,13 @@ RETURNS TEXT AS $$
         WHEN subclass IN ('bar','nightclub') THEN 'bar'
         WHEN subclass IN ('marina','dock') THEN 'harbor'
         WHEN subclass IN ('car','car_repair','taxi') THEN 'car'
-        WHEN subclass IN ('hospital','nursing_home', 'doctors', 'clinic') THEN 'hospital'
+        WHEN subclass IN ('hospital','nursing_home', 'clinic') THEN 'hospital'
         WHEN subclass IN ('grave_yard','cemetery') THEN 'cemetery'
         WHEN subclass IN ('attraction','viewpoint') THEN 'attraction'
         WHEN subclass IN ('biergarten','pub') THEN 'beer'
         WHEN subclass IN ('music','musical_instrument') THEN 'music'
         WHEN subclass IN ('american_football','stadium','soccer','pitch') THEN 'stadium'
-        WHEN subclass IN ('accessories','antiques','art','artwork','gallery','arts_centre') THEN 'art_gallery'
+        WHEN subclass IN ('art','artwork','gallery','arts_centre') THEN 'art_gallery'
         WHEN subclass IN ('bag','clothes') THEN 'clothing_store'
         WHEN subclass IN ('swimming_area','swimming') THEN 'swimming'
         WHEN subclass IN ('castle','ruins') THEN 'castle'
@@ -305,6 +304,8 @@ RETURNS TABLE(osm_id bigint, global_id text, geometry geometry, name text, name_
         CASE
             WHEN subclass = 'information'
                 THEN NULLIF(information, '')
+            WHEN subclass = 'place_of_worship'
+                    THEN NULLIF(religion, '')
             ELSE subclass
         END AS subclass,
         agg_stop,
