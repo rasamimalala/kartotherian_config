@@ -5,6 +5,17 @@ import os.path
 
 
 @task
+def cleanup_db_backup(ctx):
+    """
+    If there is a backup schema imposm cannot delete the tables in to 
+    (with the -deployproduction), so we delete them to be able to reload the data several times
+    """
+    remove_backup = "DROP SCHEMA IF EXISTS backup CASCADE;"
+    ctx.run(f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} -c "{remove_backup}"',
+            env={'PGPASSWORD': ctx.pg.password})
+
+
+@task
 def load_basemap(ctx):
     ctx.run(f'time imposm3 \
   import \
@@ -139,6 +150,7 @@ def run_post_sql_scripts(ctx):
 
 @task
 def load_osm(ctx):
+    cleanup_db_backup(ctx)
     load_basemap(ctx)
     load_poi(ctx)
     run_sql_script(ctx)
