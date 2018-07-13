@@ -5,6 +5,21 @@ import os.path
 
 
 @task
+def get_osm_data(ctx):
+    """
+    download the osm file and store it in the input_data directory
+    """
+    logging.info("downloading osm file {}")
+    file_name = os.path.basename(ctx.osm.url)
+    ctx.run(f'wget --progress=dot:giga {ctx.osm.url} --directory-prefix={ctx.data_dir}')
+    new_osm_file = f"{ctx.data_dir}/{file_name}"
+    if ctx.osm.file is not None and ctx.osm.file != new_osm_file:
+        logging.warn('the osm variable has been configured to {ctx.osm_file},'
+        'but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}')
+    ctx.osm.file = new_osm_file
+
+
+@task
 def cleanup_db_backup(ctx):
     """
     If there is a backup schema imposm cannot delete the tables in to 
@@ -20,7 +35,7 @@ def load_basemap(ctx):
     ctx.run(f'time imposm3 \
   import \
   -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
-  -read {ctx.osm_file} \
+  -read {ctx.osm.file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
@@ -33,7 +48,7 @@ def load_poi(ctx):
     ctx.run(f'time imposm3 \
   import \
   -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
-  -read {ctx.osm_file} \
+  -read {ctx.osm.file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
@@ -150,6 +165,8 @@ def run_post_sql_scripts(ctx):
 
 @task
 def load_osm(ctx):
+    if ctx.osm.url:
+        get_osm_data(ctx)
     cleanup_db_backup(ctx)
     load_basemap(ctx)
     load_poi(ctx)
@@ -172,8 +189,8 @@ def load_all(ctx):
 
     This is the main tasks that import all the datas into postgres
     """
-    if ctx.osm_file is None:
-        raise Exception("you should provide a osm_file variable")
+    if not ctx.osm.file and not ctx.osm.url:
+        raise Exception("you should provide a osm.file variable or osm.url variable")
 
     load_osm(ctx)
     load_additional_data(ctx)
