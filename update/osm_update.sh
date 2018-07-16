@@ -3,7 +3,7 @@
 set -x
 
 description="OpenStreetMap database update script"
-version="0.1/20171009"
+version="0.2/20180716"
 
 # OSMOSIS
 #
@@ -28,6 +28,7 @@ version="0.1/20171009"
 
 # ----------------------------------------------------------------------------
 # Settings
+OSMOSIS_WORKING_DIR=${OSMOSIS_WORKING_DIR:-/data/osmosis}
 
 # Osmosis
 FREQUENCY=day # from minute|hour|day
@@ -38,17 +39,17 @@ CHANGE_FILE=changes.osc.gz
 BOUNDING_BOX=""
 
 # Internal
-W_DIR=/data/osmosis
 EXEC_TIME=$(date '+%Y%m%d-%H%M%S')
-LOG_DIR=$W_DIR/log
+LOG_DIR=$OSMOSIS_WORKING_DIR/log
 LOG_FILE=$LOG_DIR/${EXEC_TIME}.$(basename $0 .sh).log
-LOG_MAXDAYS=3  # Log files are kept $LOG_MAXDAYS days
-LOCK_FILE=$W_DIR/$(basename $0 .sh).lock
+LOG_MAXDAYS=7  # Log files are kept $LOG_MAXDAYS days
+LOCK_FILE=$OSMOSIS_WORKING_DIR/$(basename $0 .sh).lock
 OSMOSIS=/usr/bin/osmosis
-STOP_FILE=${W_DIR}/stop
+STOP_FILE=${OSMOSIS_WORKING_DIR}/stop
 
 # imposm
 IMPOSM_CONFIG_DIR="/etc/imposm" # default value, can be set with the --config option
+IMPOSM_DATA_DIR="${IMPOSM_DATA_DIR:-/data/imposm}" # contains ./cache and ./diff
 
 # base tiles
 BASE_IMPOSM_CONFIG_FILENAME="config_base.json"
@@ -61,91 +62,101 @@ POI_TILERATOR_GENERATOR="gen_poi"
 POI_TILERATOR_STORAGE="poi"
 
 #tilerator
-TILERATOR_URL=http://localhost:16534
+TILERATOR_URL=${TILERATOR_URL:-http://tilerator:16534}
 FROM_ZOOM=11
 BEFORE_ZOOM=15 # exclusive
 
 # ----------------------------------------------------------------------------
 
 usage () {
-	echo "This is `basename $0` v$version"
-	echo
-	echo "    $description"
-	echo
-	echo "OPTIONS:"
-	echo
-	echo "    --osm, -o        <path to planet file>"
-	echo "        when this option is passed, we are in INIT mode: initialize Osmosis directory and apply OSM diffs on database"
-	echo
-	echo "        when this option is not passed, we are in UPDATE mode:"
-	echo "        apply diffs on OSM database based on a already initialized"
-	echo "        Osmosis working directory"
-	echo
-	echo "    --config, -c     <path to a imposm config file> [default: /etc/imposm]"
-	echo
-	echo "    --bounding-box   <optional bounding box that will passed to osmosis>"
-	echo "        the bbox must be passed as a single string in the osmosis format"
-	echo "        Exemple: --bounding-box \"top=49.5138 left=10.9351 bottom=49.3866 right=11.201\""
-	echo
-	echo "    --help, -h"
-	echo "        display help and version"
-	echo
-	echo "    Create a file named $(basename $STOP_FILE) into $W_DIR directory"
-	echo "        to put process on hold."
-	echo
-	echo "    Dependencies: osmosis, imposm3, jq"
-	echo
-	exit 0
+    echo "This is `basename $0` v$version"
+    echo
+    echo "    $description"
+    echo
+    echo "OPTIONS:"
+    echo
+    echo "    --osm, -o        <path to planet file>"
+    echo "        when this option is passed, we are in INIT mode: initialize Osmosis directory and apply OSM diffs on database"
+    echo
+    echo "        when this option is not passed, we are in UPDATE mode:"
+    echo "        apply diffs on OSM database based on a already initialized"
+    echo "        Osmosis working directory"
+    echo
+    echo "    --config, -c     <path to a imposm config file> [default: /etc/imposm]"
+    echo
+    echo "    --bounding-box   <optional bounding box that will passed to osmosis>"
+    echo "        the bbox must be passed as a single string in the osmosis format"
+    echo "        Exemple: --bounding-box \"top=49.5138 left=10.9351 bottom=49.3866 right=11.201\""
+    echo
+    echo "    --help, -h"
+    echo "        display help and version"
+    echo
+    echo "    Create a file named $(basename $STOP_FILE) into $OSMOSIS_WORKING_DIR directory"
+    echo "        to put process on hold."
+    echo
+    echo "    Dependencies: osmosis, imposm3, jq"
+    echo
+    exit 0
 }
 
 log () {
-	echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :INFO: $1" >> $LOG_FILE
+    echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :INFO: $1" >> $LOG_FILE
 }
 
 log_error () {
-	echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: $1" >> $LOG_FILE
+    echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: $1" >> $LOG_FILE
 
-	rm $LOCK_FILE
-	echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: restore initial state file" >> $LOG_FILE
-	mv ${W_DIR}/.state.txt ${W_DIR}/state.txt &>/dev/null
-	echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: $(basename $0) terminated in error!" >> $LOG_FILE
+    rm $LOCK_FILE
+    echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: restore initial state file" >> $LOG_FILE
+    mv ${OSMOSIS_WORKING_DIR}/.state.txt ${OSMOSIS_WORKING_DIR}/state.txt &>/dev/null
+    echo "[`date +"%Y-%m-%d %H:%M:%S"`] $$ :ERROR: $(basename $0) terminated in error!" >> $LOG_FILE
 
-	# Message in stdout for console and cron
-	echo "$(basename $0) (PID=$$) terminated in error!"
-	echo "$1"
-	echo "see $LOG_FILE for more details"
+    # Message in stdout for console and cron
+    echo "$(basename $0) (PID=$$) terminated in error!"
+    echo "$1"
+    echo "see $LOG_FILE for more details"
 
-	exit 1
+    exit 1
 }
 
 get_lock () {
-	if [ -s $LOCK_FILE ]; then
-		if ps -p `cat $LOCK_FILE` > /dev/null ; then
-			return 1
-		fi
-	fi
-	echo $$ > $LOCK_FILE
-	return 0
+    if [ -s $LOCK_FILE ]; then
+        if ps -p `cat $LOCK_FILE` > /dev/null ; then
+            return 1
+        fi
+    fi
+    echo $$ > $LOCK_FILE
+    return 0
 }
 
 free_lock () {
-	rm $LOCK_FILE
+    rm $LOCK_FILE
 }
 
 
 run_imposm_update() {
     local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
+    local IMPOSM_FOLDER_NAME=$(jq -r .imposm_folder_name $IMPOSM_CONFIG_FILE)
+    local MAPPING_FILENAME=$(jq -r .mapping_filename $IMPOSM_CONFIG_FILE)
+    local MAPPING_PATH="${IMPOSM_CONFIG_DIR}/${MAPPING_FILENAME}"
+
     log "apply changes on OSM database"
     log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' -f 1)"
 
-    if ! imposm3 diff -config $IMPOSM_CONFIG_FILE ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
-        log_error "imposm3 failed"
+    if ! imposm3 diff -config $IMPOSM_CONFIG_FILE -connection $PG_CONNECTION_STRING \
+        -mapping ${MAPPING_PATH} \
+        -cachedir ${IMPOSM_DATA_DIR}/cache/${IMPOSM_FOLDER_NAME} \
+        -diffdir ${IMPOSM_DATA_DIR}/diff/${IMPOSM_FOLDER_NAME} \
+        -expiretiles-dir ${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME} \
+        ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
+            log_error "imposm3 failed"
     fi
 }
 
 
 create_tiles_jobs() {
     local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
+    local IMPOSM_FOLDER_NAME=$(jq -r .imposm_folder_name $IMPOSM_CONFIG_FILE)
     local TILERATOR_GENERATOR=$2
     local TILERATOR_STORAGE=$3
 
@@ -155,19 +166,19 @@ create_tiles_jobs() {
     function concat_with_pipe { local IFS="|"; echo "$*";}
 
     # we load all the tiles generated this day
-    local EXPIRE_TILES_DIRECTORY=$(jq -r .expiretiles_dir $IMPOSM_CONFIG_FILE)
+    local EXPIRE_TILES_DIRECTORY=${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME}
     EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
 
     log "file with tile to regenerate = $EXPIRE_TILES_FILE"
 
-    curl_log=$(curl --fail -s --noproxy localhost -XPOST "$TILERATOR_URL/add?"\
+    curl_log=$(curl --fail -s -XPOST "$TILERATOR_URL/add?"\
 "generatorId=$TILERATOR_GENERATOR"\
 "&storageId=$TILERATOR_STORAGE"\
 "&zoom=$FROM_ZOOM"\
 "&fromZoom=$FROM_ZOOM"\
 "&beforeZoom=$BEFORE_ZOOM"\
 "&keepJob=true"\
-"&parts=40"\
+"&parts=80"\
 "&deleteEmpty=true"\
 "&filepath=$EXPIRE_TILES_FILE" | tee -a $LOG_FILE)
 
@@ -188,7 +199,7 @@ create_tiles_jobs() {
 
 START=$(date +%s)
 
-TMP_DIR=${W_DIR}/.$(basename $0).${EXEC_TIME}
+TMP_DIR=${OSMOSIS_WORKING_DIR}/.$(basename $0).${EXEC_TIME}
 trap 'rm -rf ${TMP_DIR} &>/dev/null' EXIT
 mkdir -p ${TMP_DIR}
 mkdir -p ${LOG_DIR}
@@ -203,7 +214,7 @@ LONGOPTIONS=config:,tilerator:,help,osm:,bounding-box:
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
-	log_error "impossible to parse the arguments"
+    log_error "impossible to parse the arguments"
 fi
 # read getopt’s output this way to handle the quoting right:
 eval set -- "$PARSED"
@@ -243,102 +254,101 @@ done
 
 
 log "new $(basename $0) process started"
-log "working into directory: ${W_DIR}"
+log "working into directory: ${OSMOSIS_WORKING_DIR}"
 
 
 if [ -e $STOP_FILE ]; then
-	log "$(basename $0) process held!"
-	exit 1
+    log "$(basename $0) process held!"
+    exit 1
 fi
 
 if ! get_lock ; then
-	log "$(basename $0) process still running: PID=$(cat ${LOCK_FILE})"
-	exit 1
+    log "$(basename $0) process still running: PID=$(cat ${LOCK_FILE})"
+    exit 1
 fi
 
 if [ ! -f $PGPASS ]; then
-	log "ERROR: PostgreSQL user $PGUSER password file $PGPASS not found!"
-	exit 1
+    log "ERROR: PostgreSQL user $PGUSER password file $PGPASS not found!"
+    exit 1
 fi
 
 # Set running mode init or update
 if [ ! -z $OSM_FILE ]; then
-	INIT_MODE=true
-	log "running in INIT mode"
+    INIT_MODE=true
+    log "running in INIT mode"
 else
-	INIT_MODE=false
-	log "running in UPDATE mode"
+    INIT_MODE=false
+    log "running in UPDATE mode"
 fi
 
 
 if [ $INIT_MODE = true ]; then
 
-	# Check planet file exists
-	if [ ! -f $OSM_FILE ]; then
-		log_error "file $OSM_FILE not found"
-	fi
+    # Check planet file exists
+    if [ ! -f $OSM_FILE ]; then
+        log_error "file $OSM_FILE not found"
+    fi
 
-	log "initializing osmosis working directory: ${W_DIR}"
-	$OSMOSIS --read-replication-interval-init workingDirectory=${W_DIR} &>> $LOG_FILE
+    log "initializing osmosis working directory: ${OSMOSIS_WORKING_DIR}"
+    $OSMOSIS --read-replication-interval-init workingDirectory=${OSMOSIS_WORKING_DIR} &>> $LOG_FILE
 
-	log "extract timestamp from planet file: $OSM_FILE"
-	TIMESTAMP=$(osmconvert $OSM_FILE --out-timestamp)
-	log "planet file timestamp is: ${TIMESTAMP}"
-	# Rewind 2 hours
-	TIMESTAMP_START=$(date -u -d @$(($(date -d "${TIMESTAMP}" '+%s') - 7200)) '+%FT%TZ')
+    log "extract timestamp from planet file: $OSM_FILE"
+    TIMESTAMP=$(osmconvert $OSM_FILE --out-timestamp)
+    log "planet file timestamp is: ${TIMESTAMP}"
+    # Rewind 2 hours
+    TIMESTAMP_START=$(date -u -d @$(($(date -d "${TIMESTAMP}" '+%s') - 7200)) '+%FT%TZ')
 
-	log "generate initial state file with date: ${TIMESTAMP_START}"
-	# state.txt is the default name for osmosis
-	wget -q \
-		"${STATE_SRV_URL}?${TIMESTAMP_START}&stream=${FREQUENCY}" \
-		-O ${W_DIR}/state.txt
+    log "generate initial state file with date: ${TIMESTAMP_START}"
+    # state.txt is the default name for osmosis
+    wget -q \
+        "${STATE_SRV_URL}?${TIMESTAMP_START}&stream=${FREQUENCY}" \
+        -O ${OSMOSIS_WORKING_DIR}/state.txt
 
-	log "update configuration file"
+    log "update configuration file"
         # configuration.txt is the default for osmosis
-	echo "baseUrl=${PLANET_URL}/${FREQUENCY}" > ${W_DIR}/configuration.txt
-	echo "maxInterval = ${MAX_INTERVAL}" >> ${W_DIR}/configuration.txt
+    echo "baseUrl=${PLANET_URL}/${FREQUENCY}" > ${OSMOSIS_WORKING_DIR}/configuration.txt
+    echo "maxInterval = ${MAX_INTERVAL}" >> ${OSMOSIS_WORKING_DIR}/configuration.txt
 
 else # Update mode: check if working directory is initialized correctly
-	if [ ! -f ${W_DIR}/configuration.txt -o ! -f ${W_DIR}/state.txt ]; then
-		log_error "osmosis working directory ${W_DIR} note initialized: please run into INIT mode before"
-	fi
+    if [ ! -f ${OSMOSIS_WORKING_DIR}/configuration.txt -o ! -f ${OSMOSIS_WORKING_DIR}/state.txt ]; then
+        log_error "osmosis working directory ${OSMOSIS_WORKING_DIR} note initialized: please run into INIT mode before"
+    fi
 fi
 
 
 log "generate changes file into ${TMP_DIR}/${CHANGE_FILE}"
 log "backup of state file"
-cp ${W_DIR}/state.txt ${W_DIR}/.state.txt
+cp ${OSMOSIS_WORKING_DIR}/state.txt ${OSMOSIS_WORKING_DIR}/.state.txt
 
 
 if [ ! -z "$BOUNDING_BOX" ]; then
-	BOUNDING_BOX_OPTION="--bounding-box $BOUNDING_BOX"
+    BOUNDING_BOX_OPTION="--bounding-box $BOUNDING_BOX"
 else
-	BOUNDING_BOX_OPTION=""
+    BOUNDING_BOX_OPTION=""
 fi
 
-if ! $OSMOSIS --read-replication-interval workingDirectory=${W_DIR} \
-	$BOUNDING_BOX_OPTION \
-	--simplify-change --write-xml-change \
-	${TMP_DIR}/${CHANGE_FILE} &>> $LOG_FILE ; then
+if ! $OSMOSIS --read-replication-interval workingDirectory=${OSMOSIS_WORKING_DIR} \
+    $BOUNDING_BOX_OPTION \
+    --simplify-change --write-xml-change \
+    ${TMP_DIR}/${CHANGE_FILE} &>> $LOG_FILE ; then
 
-	log_error "osmosis failed"
+    log_error "osmosis failed"
 fi
 
 # Update db and tiles, only if changes file is not empty
 if [ -s ${TMP_DIR}/${CHANGE_FILE} ]; then
-	# Imposm update for both tiles sources
-	run_imposm_update $BASE_IMPOSM_CONFIG_FILENAME
-	run_imposm_update $POI_IMPOSM_CONFIG_FILENAME
+    # Imposm update for both tiles sources
+    run_imposm_update $BASE_IMPOSM_CONFIG_FILENAME
+    run_imposm_update $POI_IMPOSM_CONFIG_FILENAME
 
+    # Create tiles jobs for both tiles sources
+    create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME $BASE_TILERATOR_GENERATOR $BASE_TILERATOR_STORAGE
+    create_tiles_jobs $POI_IMPOSM_CONFIG_FILENAME $POI_TILERATOR_GENERATOR $POI_TILERATOR_STORAGE
 
-	# Create tiles jobs for both tiles sources
-	create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME $BASE_TILERATOR_GENERATOR $BASE_TILERATOR_STORAGE
-	create_tiles_jobs $POI_IMPOSM_CONFIG_FILENAME $POI_TILERATOR_GENERATOR $POI_TILERATOR_STORAGE
-
-	# Uncomment next line to enable lite tiles generation, using base database :
-	# create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME "ozgen-lite" "v2-lite"
+    # Uncomment next line to enable lite tiles generation, using base database :
+    # create_tiles_jobs $BASE_IMPOSM_CONFIG_FILENAME "ozgen-lite" "v2-lite"
 else
-	log "Changes file is empty. Nothing to update."
+    log "Changes file is empty. Nothing to update."
 fi
 
 free_lock
