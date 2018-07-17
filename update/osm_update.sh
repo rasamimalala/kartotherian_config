@@ -169,6 +169,11 @@ create_tiles_jobs() {
     local EXPIRE_TILES_DIRECTORY=${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME}
     EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
 
+    if [ -z "$EXPIRE_TILES_FILE" ]; then
+        log "no expired tiles"
+        return 0
+    fi
+
     log "file with tile to regenerate = $EXPIRE_TILES_FILE"
 
     curl_log=$(curl --fail -s -XPOST "$TILERATOR_URL/add?"\
