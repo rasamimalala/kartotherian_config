@@ -66,6 +66,8 @@ TILERATOR_URL=${TILERATOR_URL:-http://tilerator:16534}
 FROM_ZOOM=11
 BEFORE_ZOOM=15 # exclusive
 
+START=$(date +%s)
+
 # ----------------------------------------------------------------------------
 
 usage () {
@@ -167,7 +169,7 @@ create_tiles_jobs() {
 
     # we load all the tiles generated this day
     local EXPIRE_TILES_DIRECTORY=${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME}
-    EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY/`date +"%Y%m%d"` -type f))
+    EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY -type f -newerct `date -d @$START -u -Iseconds`))
 
     if [ -z "$EXPIRE_TILES_FILE" ]; then
         log "no expired tiles"
@@ -200,9 +202,6 @@ create_tiles_jobs() {
 }
 
 # ----------------------------------------------------------------------------
-
-
-START=$(date +%s)
 
 TMP_DIR=${OSMOSIS_WORKING_DIR}/.$(basename $0).${EXEC_TIME}
 trap 'rm -rf ${TMP_DIR} &>/dev/null' EXIT
