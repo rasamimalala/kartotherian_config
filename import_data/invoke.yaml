@@ -14,3 +14,27 @@ osm:
   url:
   ## Path of the file
   file:
+
+## Section to configure the tiles generation
+## if neither 'x'/'y' nor 'planet' is defined, no tiles are generated
+tiles:
+  ## boolean to tell that we want to generate tiles on the whole planet
+  planet: False
+  ## the 3 parameters below are used to generate only 1 tile
+  ## X and Y coordinates and the z (zoom) are based on the Slippy Map Tile Names system. 
+  ## These can be generated easily with Geofabrik's calculator.
+  x:
+  y:
+  z:
+  ## zoom range [base_from_zoom, base_before_zoom[ to generate the base tiles
+  base_from_zoom: 0
+  base_before_zoom: 15
+  ## zoom range [poi_from_zoom, poi_before_zoom[ to generate the poi tiles
+  poi_from_zoom: 14
+  poi_before_zoom: 15
+  ## number of parts to break each jobs into
+  parts: 8
+  ## host of tilerator
+  tilerator_host: http://tilerator
+  ## port of tilerator
+  tilerator_port:

@@ -2,6 +2,10 @@ import logging
 import invoke
 from invoke import task
 import os.path
+import requests
+from enum import Enum
+
+logging.basicConfig(level=logging.INFO)
 
 
 @task
@@ -211,12 +215,128 @@ def load_additional_data(ctx):
     import_wikidata(ctx)
 
 
+@task
+def generate_tiles(ctx):
+    """
+    Start the tiles generation
+
+    the Tiles generation process is handle in the background by tilerator
+    """
+    TilesLayer = Enum("TilesLayer", "BASEMAP POI")
+
+    def generate_tiles(
+        tiles_layer,
+        from_zoom,
+        before_zoom,
+        z,
+        x=None,
+        y=None,
+        check_previous_layer=False,
+        check_base_layer_level=None,
+    ):
+        params = {
+            "fromZoom": from_zoom,
+            "beforeZoom": before_zoom,
+            "keepJob": "true",
+            "parts": ctx.tiles.parts,
+            "deleteEmpty": "true",
+            "zoom": z
+        }
+        if tiles_layer == TilesLayer.BASEMAP:
+            params.update({"generatorId": "substbasemap", "storageId": "basemap"})
+        elif tiles_layer == TilesLayer.POI:
+            params.update({"generatorId": "gen_poi", "storageId": "poi"})
+        else:
+            raise Exception("invalid tiles_layer")
+
+        if x:
+            params["x"] = x
+        if y:
+            params["y"] = y
+        if check_previous_layer:
+            # this tells tilerator not to generate a tile if there is not tile at the previous zoom
+            # this saves a lots of time since we won't generate tiles on oceans
+            params["checkZoom"] = -1
+            params["y"] = y
+        if check_base_layer_level:
+            # this tells tilerator not to generate a tile if there is not tile at the previous zoom
+            # this saves a lots of time since we won't generate tiles on oceans
+            params["checkZoom"] = check_base_layer_level
+            params["sourceId"] = "basemap"
+
+        url = ctx.tiles.tilerator_host
+        if ctx.tiles.tilerator_port:
+            url += f":{ctx.tiles.tilerator_port}"
+        url += "/add"
+
+        logging.info(f"posting a tilerator job on {url} with params: {params}")
+        res = requests.post(url, params=params)
+
+        res.raise_for_status()
+        json_res = res.json()
+        if "error" in json_res:
+            # tilerator can return status 200 but an error inside the response, so we need to check it
+            raise Exception(
+                f"impossible to run tilerator job, error: {json_res['error']}"
+            )
+        logging.info(f"jobs: {res.json()}")
+
+    if ctx.tiles.planet:
+        logging.info("generating tiles for the planet")
+        # for the planet we tweak the tiles generation a bit to speed it up
+        # we first generate all the tiles for the first levels
+        generate_tiles(tiles_layer=TilesLayer.BASEMAP, z=0, from_zoom=0, before_zoom=10)
+        # from the zoom 10 we generate only the tiles if there is a parent tiles
+        # since tilerator does not generate tiles if the parent tile is composed only of 1 element
+        # it speed up greatly the tiles generation by not even trying to generate tiles for oceans (and desert)
+        generate_tiles(
+            tiles_layer=TilesLayer.BASEMAP,
+            z=10,
+            from_zoom=10,
+            before_zoom=15,
+            check_previous_layer=True,
+        )
+        # for the poi, we generate only tiles if we have a base tile on the level 13
+        # Note: we check the level 13 and not 14 because the tilegeneration process is in the background
+        # and we might not have finished all basemap 14th zoom level tiles when starting the poi generation
+        # it's a bit of a trick but works fine
+        generate_tiles(
+            tiles_layer=TilesLayer.POI,
+            z=14,
+            from_zoom=14,
+            before_zoom=15,
+            check_base_layer_level=13,
+        )
+    elif ctx.tiles.x and ctx.tiles.y and ctx.tiles.z:
+        logging.info(
+            f"generating tiles for {ctx.tiles.x} / {ctx.tiles.y}, z = {ctx.tiles.z}"
+        )
+        generate_tiles(
+            tiles_layer=TilesLayer.BASEMAP,
+            x=ctx.tiles.x,
+            y=ctx.tiles.y,
+            z=ctx.tiles.z,
+            from_zoom=ctx.tiles.base_from_zoom,
+            before_zoom=ctx.tiles.base_before_zoom,
+        )
+        generate_tiles(
+            tiles_layer=TilesLayer.POI,
+            x=ctx.tiles.x,
+            y=ctx.tiles.y,
+            z=ctx.tiles.z,
+            from_zoom=ctx.tiles.poi_from_zoom,
+            before_zoom=ctx.tiles.poi_before_zoom,
+        )
+    else:
+        logging.info("no parameter given for tile generation, skipping it")
+
+
 @task(default=True)
 def load_all(ctx):
     """
     default task called if `invoke` is run without args
 
-    This is the main tasks that import all the datas into postgres
+    This is the main tasks that import all the datas into postgres and start the tiles generation process
     """
     if not ctx.osm.file and not ctx.osm.url:
         raise Exception("you should provide a osm.file variable or osm.url variable")
@@ -224,3 +344,4 @@ def load_all(ctx):
     load_osm(ctx)
     load_additional_data(ctx)
     run_post_sql_scripts(ctx)
+    generate_tiles(ctx)
