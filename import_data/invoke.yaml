@@ -4,10 +4,14 @@ pg:
   host: postgres
   password: gis
   port: 5432
+
 main_dir: /srv/import_data
 sql_dir: /srv/import_data/sql
+
 generated_files_dir: /data/imposm
 data_dir: /data
+update_tiles_dir: /data/update_tiles_data
+
 osm:
   ## one of those value needs to be configured
   ## URL where to get the osm file
@@ -45,3 +49,8 @@ tiles:
   poi_sources:
     generator: gen_poi
     storage: poi
+
+osm_update:
+  replication_url: https://planet.osm.org/replication/day
+  max_interval: 0 # maximum delay to catch up (in seconds) by osmosis, 0 to fetch all changes
+  max_interations: 300 # maximum number of requests to replication server to find the correct state file

@@ -30,15 +30,8 @@ version="0.2/20180716"
 # Settings
 OSMOSIS_WORKING_DIR=${OSMOSIS_WORKING_DIR:-/data/osmosis}
 
-# Osmosis
-FREQUENCY=day # from minute|hour|day
-MAX_INTERVAL=0  # 3600 for an hour
-STATE_SRV_URL=https://replicate-sequences.osm.mazdermind.de/
-PLANET_URL=https://planet.openstreetmap.org/replication
-CHANGE_FILE=changes.osc.gz
-BOUNDING_BOX=""
-
 # Internal
+CHANGE_FILE=changes.osc.gz
 EXEC_TIME=$(date '+%Y%m%d-%H%M%S')
 LOG_DIR=$OSMOSIS_WORKING_DIR/log
 LOG_FILE=$LOG_DIR/${EXEC_TIME}.$(basename $0 .sh).log
@@ -53,13 +46,13 @@ IMPOSM_DATA_DIR="${IMPOSM_DATA_DIR:-/data/imposm}" # contains ./cache and ./diff
 
 # base tiles
 BASE_IMPOSM_CONFIG_FILENAME="config_base.json"
-BASE_TILERATOR_GENERATOR=substbasemap
-BASE_TILERATOR_STORAGE=basemap
+BASE_TILERATOR_GENERATOR="${BASE_TILERATOR_GENERATOR:-substbasemap}"
+BASE_TILERATOR_STORAGE="${BASE_TILERATOR_STORAGE:-basemap}"
 
 # poi tiles
 POI_IMPOSM_CONFIG_FILENAME="config_poi.json"
-POI_TILERATOR_GENERATOR="gen_poi"
-POI_TILERATOR_STORAGE="poi"
+POI_TILERATOR_GENERATOR="${POI_TILERATOR_GENERATOR:-gen_poi}"
+POI_TILERATOR_STORAGE="${POI_TILERATOR_STORAGE:-poi}"
 
 #tilerator
 TILERATOR_URL=${TILERATOR_URL:-http://tilerator:16534}
@@ -77,18 +70,7 @@ usage () {
     echo
     echo "OPTIONS:"
     echo
-    echo "    --osm, -o        <path to planet file>"
-    echo "        when this option is passed, we are in INIT mode: initialize Osmosis directory and apply OSM diffs on database"
-    echo
-    echo "        when this option is not passed, we are in UPDATE mode:"
-    echo "        apply diffs on OSM database based on a already initialized"
-    echo "        Osmosis working directory"
-    echo
-    echo "    --config, -c     <path to a imposm config file> [default: /etc/imposm]"
-    echo
-    echo "    --bounding-box   <optional bounding box that will passed to osmosis>"
-    echo "        the bbox must be passed as a single string in the osmosis format"
-    echo "        Exemple: --bounding-box \"top=49.5138 left=10.9351 bottom=49.3866 right=11.201\""
+    echo "    --config, -c     <path to imposm config dir> [default: /etc/imposm]"
     echo
     echo "    --help, -h"
     echo "        display help and version"
@@ -214,7 +196,7 @@ find ${LOG_DIR} -name "*.log" -mtime +$LOG_MAXDAYS -delete
 
 
 OPTIONS=ctho
-LONGOPTIONS=config:,tilerator:,help,osm:,bounding-box:
+LONGOPTIONS=config:,tilerator:,help
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -233,14 +215,6 @@ while true; do
         -h|--help)
             HELP=true
             shift
-            ;;
-        -o|--osm)
-            OSM_FILE="$2"
-            shift 2
-            ;;
-        --bounding-box)
-            BOUNDING_BOX="$2"
-            shift 2
             ;;
         --)
             shift
@@ -276,63 +250,17 @@ if [ ! -f $PGPASS ]; then
     exit 1
 fi
 
-# Set running mode init or update
-if [ ! -z $OSM_FILE ]; then
-    INIT_MODE=true
-    log "running in INIT mode"
-else
-    INIT_MODE=false
-    log "running in UPDATE mode"
+
+if [ ! -f ${OSMOSIS_WORKING_DIR}/configuration.txt -o ! -f ${OSMOSIS_WORKING_DIR}/state.txt ]; then
+    log_error "osmosis working directory ${OSMOSIS_WORKING_DIR} is not initialized."
 fi
-
-
-if [ $INIT_MODE = true ]; then
-
-    # Check planet file exists
-    if [ ! -f $OSM_FILE ]; then
-        log_error "file $OSM_FILE not found"
-    fi
-
-    log "initializing osmosis working directory: ${OSMOSIS_WORKING_DIR}"
-    $OSMOSIS --read-replication-interval-init workingDirectory=${OSMOSIS_WORKING_DIR} &>> $LOG_FILE
-
-    log "extract timestamp from planet file: $OSM_FILE"
-    TIMESTAMP=$(osmconvert $OSM_FILE --out-timestamp)
-    log "planet file timestamp is: ${TIMESTAMP}"
-    # Rewind 2 hours
-    TIMESTAMP_START=$(date -u -d @$(($(date -d "${TIMESTAMP}" '+%s') - 7200)) '+%FT%TZ')
-
-    log "generate initial state file with date: ${TIMESTAMP_START}"
-    # state.txt is the default name for osmosis
-    wget -q \
-        "${STATE_SRV_URL}?${TIMESTAMP_START}&stream=${FREQUENCY}" \
-        -O ${OSMOSIS_WORKING_DIR}/state.txt
-
-    log "update configuration file"
-        # configuration.txt is the default for osmosis
-    echo "baseUrl=${PLANET_URL}/${FREQUENCY}" > ${OSMOSIS_WORKING_DIR}/configuration.txt
-    echo "maxInterval = ${MAX_INTERVAL}" >> ${OSMOSIS_WORKING_DIR}/configuration.txt
-
-else # Update mode: check if working directory is initialized correctly
-    if [ ! -f ${OSMOSIS_WORKING_DIR}/configuration.txt -o ! -f ${OSMOSIS_WORKING_DIR}/state.txt ]; then
-        log_error "osmosis working directory ${OSMOSIS_WORKING_DIR} note initialized: please run into INIT mode before"
-    fi
-fi
-
 
 log "generate changes file into ${TMP_DIR}/${CHANGE_FILE}"
 log "backup of state file"
 cp ${OSMOSIS_WORKING_DIR}/state.txt ${OSMOSIS_WORKING_DIR}/.state.txt
 
 
-if [ ! -z "$BOUNDING_BOX" ]; then
-    BOUNDING_BOX_OPTION="--bounding-box $BOUNDING_BOX"
-else
-    BOUNDING_BOX_OPTION=""
-fi
-
 if ! $OSMOSIS --read-replication-interval workingDirectory=${OSMOSIS_WORKING_DIR} \
-    $BOUNDING_BOX_OPTION \
     --simplify-change --write-xml-change \
     ${TMP_DIR}/${CHANGE_FILE} &>> $LOG_FILE ; then
 

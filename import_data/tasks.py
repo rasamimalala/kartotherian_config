@@ -1,9 +1,13 @@
 import logging
+import os.path
+from datetime import timedelta
+
+import requests
+import configparser
 import invoke
 from invoke import task
-import os.path
-import requests
 from enum import Enum
+from dateutil.parser import parse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -339,6 +343,63 @@ def generate_tiles(ctx):
     else:
         logging.info("no parameter given for tile generation, skipping it")
 
+@task
+def init_osm_update(ctx):
+    """
+    Init osmosis folder with configuration files and
+    latest state.txt file before .pbf timestamp
+    """
+    session = requests.Session()
+
+    def get_state_url(sequence_number=None):
+        base_url = ctx.osm_update.replication_url
+        if sequence_number is None:
+            # Get last state.txt
+            return f'{base_url}/state.txt'
+        else:
+            return f'{base_url}' \
+                f'/{sequence_number // 1_000_000 :03d}' \
+                f'/{sequence_number // 1000 % 1000 :03d}' \
+                f'/{sequence_number  % 1000 :03d}.state.txt'
+
+    def get_state(sequence_number=None):
+        url = get_state_url(sequence_number)
+        resp = session.get(url)
+        resp.raise_for_status()
+        # state file may contain escaped ':' in the timestamp
+        state_string = resp.text.replace('\:',':')
+        c = configparser.ConfigParser()
+        c.read_string('[root]\n'+state_string)
+        return c['root']
+
+    # Init osmosis working directory
+    ctx.run(f'mkdir -p {ctx.update_tiles_dir}')
+    ctx.run(f'touch {ctx.update_tiles_dir}/download.lock')
+
+    raw_osm_datetime = ctx.run(f'osmconvert {ctx.osm.file} --out-timestamp').stdout
+    osm_datetime = parse(raw_osm_datetime)
+    # Rewind 2 hours as a precaution
+    osm_datetime -= timedelta(hours=2)
+
+    last_state = get_state()
+    sequence_number = int(last_state.get('sequenceNumber'))
+    sequence_dt = parse(last_state.get('timestamp'))
+
+    for i in range(ctx.osm_update.max_interations):
+        if sequence_dt < osm_datetime:
+            break
+        sequence_number -= 1
+        state = get_state(sequence_number)
+        sequence_dt = parse(state.get('timestamp'))
+    else:
+        logging.error('Failed to init osm update. ' \
+            'Could not find a replication sequence before %s', osm_datetime)
+        return
+
+    state_url = get_state_url(sequence_number)
+    ctx.run(f'wget -q "{state_url}" -O {ctx.update_tiles_dir}/state.txt')
+    ctx.run(f'echo "baseUrl={ctx.osm_update.replication_url}" > {ctx.update_tiles_dir}/configuration.txt')
+    ctx.run(f'echo "maxInterval = {ctx.osm_update.max_interval}" >> {ctx.update_tiles_dir}/configuration.txt')
 
 @task(default=True)
 def load_all(ctx):
@@ -354,3 +415,4 @@ def load_all(ctx):
     load_additional_data(ctx)
     run_post_sql_scripts(ctx)
     generate_tiles(ctx)
+    init_osm_update(ctx)
