@@ -38,3 +38,10 @@ tiles:
   tilerator_host: http://tilerator
   ## port of tilerator
   tilerator_port:
+  # names of the tilerator sources
+  base_sources:
+    generator: substbasemap
+    storage: basemap
+  poi_sources:
+    generator: gen_poi
+    storage: poi

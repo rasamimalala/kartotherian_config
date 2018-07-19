@@ -240,12 +240,22 @@ def generate_tiles(ctx):
             "keepJob": "true",
             "parts": ctx.tiles.parts,
             "deleteEmpty": "true",
-            "zoom": z
+            "zoom": z,
         }
         if tiles_layer == TilesLayer.BASEMAP:
-            params.update({"generatorId": "substbasemap", "storageId": "basemap"})
+            params.update(
+                {
+                    "generatorId": ctx.tiles.base_sources.generator,
+                    "storageId": ctx.tiles.base_sources.storage,
+                }
+            )
         elif tiles_layer == TilesLayer.POI:
-            params.update({"generatorId": "gen_poi", "storageId": "poi"})
+            params.update(
+                {
+                    "generatorId": ctx.tiles.poi_sources.generator,
+                    "storageId": ctx.tiles.poi_sources.storage,
+                }
+            )
         else:
             raise Exception("invalid tiles_layer")
 
@@ -257,12 +267,11 @@ def generate_tiles(ctx):
             # this tells tilerator not to generate a tile if there is not tile at the previous zoom
             # this saves a lots of time since we won't generate tiles on oceans
             params["checkZoom"] = -1
-            params["y"] = y
         if check_base_layer_level:
             # this tells tilerator not to generate a tile if there is not tile at the previous zoom
             # this saves a lots of time since we won't generate tiles on oceans
             params["checkZoom"] = check_base_layer_level
-            params["sourceId"] = "basemap"
+            params["sourceId"] = ctx.tiles.base_sources.storage
 
         url = ctx.tiles.tilerator_host
         if ctx.tiles.tilerator_port:
