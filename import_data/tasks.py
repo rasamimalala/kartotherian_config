@@ -19,14 +19,14 @@ def get_osm_data(ctx):
     """
     download the osm file and store it in the input_data directory
     """
-    logging.info("downloading osm file from {}", ctx.osm.url)
+    logging.info("downloading osm file from %s", ctx.osm.url)
     file_name = os.path.basename(ctx.osm.url)
     ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --directory-prefix={ctx.data_dir}")
     new_osm_file = f"{ctx.data_dir}/{file_name}"
     if ctx.osm.file is not None and ctx.osm.file != new_osm_file:
         logging.warn(
-            "the osm variable has been configured to {ctx.osm_file},"
-            "but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}"
+            f"the osm variable has been configured to {ctx.osm_file}, "
+            f"but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}"
         )
     ctx.osm.file = new_osm_file
 
@@ -399,7 +399,7 @@ def init_osm_update(ctx):
         state = get_state(sequence_number)
         sequence_dt = state.timestamp
     else:
-        logging.error('Failed to init osm update. ' \
+        logging.error('Failed to init osm update. '
             'Could not find a replication sequence before %s', osm_datetime)
         return
 
