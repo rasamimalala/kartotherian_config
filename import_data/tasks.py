@@ -1,13 +1,14 @@
 import logging
 import os.path
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import requests
 import configparser
 import invoke
 from invoke import task
 from enum import Enum
-from dateutil.parser import parse
+from pydantic import BaseModel
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,7 +18,7 @@ def get_osm_data(ctx):
     """
     download the osm file and store it in the input_data directory
     """
-    logging.info("downloading osm file {}")
+    logging.info("downloading osm file from {}", ctx.osm.url)
     file_name = os.path.basename(ctx.osm.url)
     ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --directory-prefix={ctx.data_dir}")
     new_osm_file = f"{ctx.data_dir}/{file_name}"
@@ -88,7 +89,7 @@ def run_sql_script(ctx):
 
 @task
 def import_natural_earth(ctx):
-    print("importing natural earth shapes in postgres")
+    logging.info("importing natural earth shapes in postgres")
     target_file = f"{ctx.data_dir}/natural_earth_vector.sqlite"
 
     if not os.path.isfile(target_file):
@@ -117,7 +118,7 @@ def import_natural_earth(ctx):
 
 @task
 def import_water_polygon(ctx):
-    print("importing water polygon shapes in postgres")
+    logging.info("importing water polygon shapes in postgres")
 
     target_file = f"{ctx.data_dir}/water_polygons.shp"
     if not os.path.isfile(target_file):
@@ -136,7 +137,7 @@ def import_water_polygon(ctx):
 
 @task
 def import_lake(ctx):
-    print("importing the lakes borders in postgres")
+    logging.info("importing the lakes borders in postgres")
 
     target_file = f"{ctx.data_dir}/lake_centerline.geojson"
     if not os.path.isfile(target_file):
@@ -159,7 +160,7 @@ def import_lake(ctx):
 
 @task
 def import_border(ctx):
-    print("importing the borders in postgres")
+    logging.info("importing the borders in postgres")
 
     target_file = f"{ctx.data_dir}/osmborder_lines.csv"
     if not os.path.isfile(target_file):
@@ -195,7 +196,7 @@ def run_post_sql_scripts(ctx):
     load the sql file with all the functions to generate the layers
     this file has been generated using https://github.com/QwantResearch/openmaptiles
     """
-    print("running postsql scripts")
+    logging.info("running postsql scripts")
     _run_sql_script(ctx, "generated_base.sql")
     _run_sql_script(ctx, "generated_poi.sql")
 
@@ -349,7 +350,12 @@ def init_osm_update(ctx):
     Init osmosis folder with configuration files and
     latest state.txt file before .pbf timestamp
     """
+    logging.info("initializing osm update...")
     session = requests.Session()
+
+    class OsmState(BaseModel):
+        sequenceNumber: int
+        timestamp: datetime
 
     def get_state_url(sequence_number=None):
         base_url = ctx.osm_update.replication_url
@@ -370,7 +376,7 @@ def init_osm_update(ctx):
         state_string = resp.text.replace('\:',':')
         c = configparser.ConfigParser()
         c.read_string('[root]\n'+state_string)
-        return c['root']
+        return OsmState(**c['root'])
 
     # Init osmosis working directory
     ctx.run(f'mkdir -p {ctx.update_tiles_dir}')
@@ -382,15 +388,15 @@ def init_osm_update(ctx):
     osm_datetime -= timedelta(hours=2)
 
     last_state = get_state()
-    sequence_number = int(last_state.get('sequenceNumber'))
-    sequence_dt = parse(last_state.get('timestamp'))
+    sequence_number = last_state.sequenceNumber
+    sequence_dt = last_state.timestamp
 
     for i in range(ctx.osm_update.max_interations):
         if sequence_dt < osm_datetime:
             break
         sequence_number -= 1
         state = get_state(sequence_number)
-        sequence_dt = parse(state.get('timestamp'))
+        sequence_dt = state.timestamp
     else:
         logging.error('Failed to init osm update. ' \
             'Could not find a replication sequence before %s', osm_datetime)

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "a6ecfd7c1536aedc11a9309abbea684c03a6a9bc65cdd409eacf7d44c4423625"
+            "sha256": "54e1b6f00e47a01c7db4ffaf06b397716c22964580e1f9ef43b114790a2ddda3"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -53,13 +53,13 @@
             "index": "pypi",
             "version": "==1.1.0"
         },
-        "python-dateutil": {
+        "pydantic": {
             "hashes": [
-                "sha256:1adb80e7a782c12e52ef9a8182bebeb73f1d7e24e374397af06fb4956c8dc5c0",
-                "sha256:e27001de32f627c22380a688bcc43ce83504a7bc5da472209b4c70f02829f0b8"
+                "sha256:620b8240edd885b1af716bfcf0d02666ff496f7727f227163d77bc18ed2655c6",
+                "sha256:96e404144003fc32c46ffc5d861174087bfd93707c929999d2882ce968a2f944"
             ],
             "index": "pypi",
-            "version": "==2.7.3"
+            "version": "==0.11.2"
         },
         "requests": {
             "hashes": [
@@ -68,13 +68,6 @@
             ],
             "index": "pypi",
             "version": "==2.19.1"
-        },
-        "six": {
-            "hashes": [
-                "sha256:70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9",
-                "sha256:832dc0e10feb1aa2c68dcc57dbb658f1c7e65b9b61af69048abc87a2db00a0eb"
-            ],
-            "version": "==1.11.0"
         },
         "urllib3": {
             "hashes": [

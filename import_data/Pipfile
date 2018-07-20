@@ -6,11 +6,10 @@ name = "pypi"
 [dev-packages]
 
 [packages]
-
 invoke = "*"
 requests = "*"
 configparser = "*"
-python-dateutil = "*"
+pydantic = "*"
 
 [requires]
 python_version = "3.6"
