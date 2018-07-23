@@ -382,7 +382,11 @@ def init_osm_update(ctx):
     session = requests.Session()
 
     class OsmState(BaseModel):
-        sequenceNumber: int
+        """
+        ConfigParser uses lowercased keys
+        "sequenceNumber" from state.txt is renamed to "sequencenumber"
+        """
+        sequencenumber: int
         timestamp: datetime
 
     def get_state_url(sequence_number=None):
@@ -416,7 +420,7 @@ def init_osm_update(ctx):
     osm_datetime -= timedelta(hours=2)
 
     last_state = get_state()
-    sequence_number = last_state.sequenceNumber
+    sequence_number = last_state.sequencenumber
     sequence_dt = last_state.timestamp
 
     for i in range(ctx.osm_update.max_interations):
