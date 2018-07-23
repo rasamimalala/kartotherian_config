@@ -8,6 +8,7 @@ import configparser
 import invoke
 from invoke import task
 from pydantic import BaseModel
+from pydantic.datetime_parse import parse_datetime
 
 
 logging.basicConfig(level=logging.INFO)
@@ -410,7 +411,7 @@ def init_osm_update(ctx):
     ctx.run(f'touch {ctx.update_tiles_dir}/download.lock')
 
     raw_osm_datetime = ctx.run(f'osmconvert {ctx.osm.file} --out-timestamp').stdout
-    osm_datetime = parse(raw_osm_datetime)
+    osm_datetime = parse_datetime(raw_osm_datetime)
     # Rewind 2 hours as a precaution
     osm_datetime -= timedelta(hours=2)
 
