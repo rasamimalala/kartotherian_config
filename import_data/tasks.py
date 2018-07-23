@@ -224,6 +224,7 @@ def load_additional_data(ctx):
 
 
 def create_tiles_jobs(
+    ctx,
     tiles_layer,
     from_zoom,
     before_zoom,
@@ -301,11 +302,18 @@ def generate_tiles(ctx):
         logging.info("generating tiles for the planet")
         # for the planet we tweak the tiles generation a bit to speed it up
         # we first generate all the tiles for the first levels
-        create_tiles_jobs(tiles_layer=TilesLayer.BASEMAP, z=0, from_zoom=0, before_zoom=10)
+        create_tiles_jobs(
+            ctx,
+            tiles_layer=TilesLayer.BASEMAP,
+            z=0,
+            from_zoom=0,
+            before_zoom=10
+        )
         # from the zoom 10 we generate only the tiles if there is a parent tiles
         # since tilerator does not generate tiles if the parent tile is composed only of 1 element
         # it speed up greatly the tiles generation by not even trying to generate tiles for oceans (and desert)
         create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.BASEMAP,
             z=10,
             from_zoom=10,
@@ -317,6 +325,7 @@ def generate_tiles(ctx):
         # and we might not have finished all basemap 14th zoom level tiles when starting the poi generation
         # it's a bit of a trick but works fine
         create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.POI,
             z=14,
             from_zoom=14,
@@ -328,6 +337,7 @@ def generate_tiles(ctx):
             f"generating tiles for {ctx.tiles.x} / {ctx.tiles.y}, z = {ctx.tiles.z}"
         )
         create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.BASEMAP,
             x=ctx.tiles.x,
             y=ctx.tiles.y,
@@ -336,6 +346,7 @@ def generate_tiles(ctx):
             before_zoom=ctx.tiles.base_before_zoom,
         )
         create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.POI,
             x=ctx.tiles.x,
             y=ctx.tiles.y,
@@ -351,6 +362,7 @@ def generate_tiles(ctx):
 def generate_expired_tiles(ctx, tiles_layer, from_zoom, before_zoom, expired_tiles):
     logging.info("generating expired tiles from %s", expired_tiles)
     create_tiles_jobs(
+        ctx,
         tiles_layer=tiles_layer,
         z=from_zoom,
         from_zoom=from_zoom,
