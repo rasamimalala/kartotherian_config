@@ -1,6 +1,8 @@
 pg:
   user: gis
   database: gis
+  import_database: import_gis
+  backup_database: backup_gis
   host: postgres
   password: gis
   port: 5432
