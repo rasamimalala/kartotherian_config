@@ -429,6 +429,7 @@ def init_osm_update(ctx):
 def run_osm_update(ctx):
     ctx.run(f'{ctx.main_dir}/config/import_data/osm_update.sh --config {ctx.main_dir}/config/imposm',
         env={
+            'PG_CONNECTION_STRING':  f'postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}',
             'OSMOSIS_WORKING_DIR': ctx.update_tiles_dir,
             'IMPOSM_DATA_DIR': ctx.generated_files_dir,
         }
