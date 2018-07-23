@@ -39,6 +39,7 @@ LOG_MAXDAYS=7  # Log files are kept $LOG_MAXDAYS days
 LOCK_FILE=$OSMOSIS_WORKING_DIR/$(basename $0 .sh).lock
 OSMOSIS=/usr/bin/osmosis
 STOP_FILE=${OSMOSIS_WORKING_DIR}/stop
+INVOKE_CONFIG_FILE=""
 
 # imposm
 IMPOSM_CONFIG_DIR="/etc/imposm" # default value, can be set with the --config option
@@ -46,16 +47,11 @@ IMPOSM_DATA_DIR="${IMPOSM_DATA_DIR:-/data/imposm}" # contains ./cache and ./diff
 
 # base tiles
 BASE_IMPOSM_CONFIG_FILENAME="config_base.json"
-BASE_TILERATOR_GENERATOR="${BASE_TILERATOR_GENERATOR:-substbasemap}"
-BASE_TILERATOR_STORAGE="${BASE_TILERATOR_STORAGE:-basemap}"
 
 # poi tiles
 POI_IMPOSM_CONFIG_FILENAME="config_poi.json"
-POI_TILERATOR_GENERATOR="${POI_TILERATOR_GENERATOR:-gen_poi}"
-POI_TILERATOR_STORAGE="${POI_TILERATOR_STORAGE:-poi}"
 
 #tilerator
-TILERATOR_URL=${TILERATOR_URL:-http://tilerator:16534}
 FROM_ZOOM=11
 BEFORE_ZOOM=15 # exclusive
 
@@ -120,7 +116,7 @@ free_lock () {
 
 run_imposm_update() {
     local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
-    local IMPOSM_FOLDER_NAME=$(jq -r .imposm_folder_name $IMPOSM_CONFIG_FILE)
+    local IMPOSM_FOLDER_NAME=$(jq -r .tiles_layer_name $IMPOSM_CONFIG_FILE)
     local MAPPING_FILENAME=$(jq -r .mapping_filename $IMPOSM_CONFIG_FILE)
     local MAPPING_PATH="${IMPOSM_CONFIG_DIR}/${MAPPING_FILENAME}"
 
@@ -140,9 +136,7 @@ run_imposm_update() {
 
 create_tiles_jobs() {
     local IMPOSM_CONFIG_FILE="${IMPOSM_CONFIG_DIR}/$1"
-    local IMPOSM_FOLDER_NAME=$(jq -r .imposm_folder_name $IMPOSM_CONFIG_FILE)
-    local TILERATOR_GENERATOR=$2
-    local TILERATOR_STORAGE=$3
+    local TILES_LAYER_NAME=$(jq -r .tiles_layer_name $IMPOSM_CONFIG_FILE)
 
     log "Creating tiles jobs for $IMPOSM_CONFIG_FILE"
 
@@ -150,7 +144,7 @@ create_tiles_jobs() {
     function concat_with_pipe { local IFS="|"; echo "$*";}
 
     # we load all the tiles generated this day
-    local EXPIRE_TILES_DIRECTORY=${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME}
+    local EXPIRE_TILES_DIRECTORY=${OSMOSIS_WORKING_DIR}/expiretiles/${TILES_LAYER_NAME}
     EXPIRE_TILES_FILE=$(concat_with_pipe $(find $EXPIRE_TILES_DIRECTORY -type f -newerct `date -d @$START -u -Iseconds`))
 
     if [ -z "$EXPIRE_TILES_FILE" ]; then
@@ -160,27 +154,16 @@ create_tiles_jobs() {
 
     log "file with tile to regenerate = $EXPIRE_TILES_FILE"
 
-    curl_log=$(curl --fail -s -XPOST "$TILERATOR_URL/add?"\
-"generatorId=$TILERATOR_GENERATOR"\
-"&storageId=$TILERATOR_STORAGE"\
-"&zoom=$FROM_ZOOM"\
-"&fromZoom=$FROM_ZOOM"\
-"&beforeZoom=$BEFORE_ZOOM"\
-"&keepJob=true"\
-"&parts=80"\
-"&deleteEmpty=true"\
-"&filepath=$EXPIRE_TILES_FILE" | tee -a $LOG_FILE)
-
-    if [ -z "${curl_log}" ]; then
-        log_error "curl fail"
+    local INVOKE_OPTION=""
+    if [ ! -z "$INVOKE_CONFIG_FILE" ]; then
+        INVOKE_OPTION="-f $INVOKE_CONFIG_FILE"
     fi
 
-    # tilerator return a 200 even if it fails...
-    ERRORS=$(echo $curl_log | jq ".error")
-    if [ "$ERRORS" != "null" ]; then
-        log_error "tilerator fail: $ERRORS"
-    fi
-
+    invoke $INVOKE_OPTION generate-expired-tiles \
+        --tiles-layer $TILES_LAYER_NAME \
+        --from-zoom $FROM_ZOOM \
+        --before-zoom $BEFORE_ZOOM \
+        --expired-tiles $EXPIRE_TILES_FILE | tee -a $LOG_FILE
 }
 
 # ----------------------------------------------------------------------------

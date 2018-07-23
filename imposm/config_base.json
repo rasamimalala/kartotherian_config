@@ -1,7 +1,5 @@
 {
-    "imposm_folder_name": "base", 
+    "tiles_layer_name": "basemap",
     "mapping_filename": "generated_mapping_base.yaml",
-    "replication_url": "https://planet.openstreetmap.org/replication/day/",
-    "replication_interval": "24h",
     "expiretiles_zoom": 14
 }

@@ -1,7 +1,5 @@
 {
-    "imposm_folder_name": "poi", 
+    "tiles_layer_name": "poi",
     "mapping_filename": "generated_mapping_poi.yaml",
-    "replication_url": "https://planet.openstreetmap.org/replication/day/",
-    "replication_interval": "24h",
     "expiretiles_zoom": 14
 }
