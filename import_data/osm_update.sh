@@ -39,7 +39,7 @@ LOG_MAXDAYS=7  # Log files are kept $LOG_MAXDAYS days
 LOCK_FILE=$OSMOSIS_WORKING_DIR/$(basename $0 .sh).lock
 OSMOSIS=/usr/bin/osmosis
 STOP_FILE=${OSMOSIS_WORKING_DIR}/stop
-INVOKE_CONFIG_FILE=""
+INVOKE_CONFIG_FILE="${INVOKE_CONFIG_FILE:-}"
 
 # imposm
 IMPOSM_CONFIG_DIR="/etc/imposm" # default value, can be set with the --config option
