@@ -8,14 +8,11 @@ from enum import Enum
 logging.basicConfig(level=logging.INFO)
 
 
-def _execute_sql(ctx, sql, db=None, additional_options=''):
+def _execute_sql(ctx, sql, db=None, additional_options=""):
     query = f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -c "{sql}" {additional_options}'
     if db is not None:
         query += f" -d {db}"
-    return ctx.run(
-        query,
-        env={"PGPASSWORD": ctx.pg.password},
-    )
+    return ctx.run(query, env={"PGPASSWORD": ctx.pg.password})
 
 
 @task
@@ -24,17 +21,24 @@ def prepare_db(ctx):
     creates the import database and remove the old backup one
     """
     _execute_sql(ctx, f"DROP DATABASE IF EXISTS {ctx.pg.backup_database};")
-    has_db = _execute_sql(ctx, f"SELECT 1 FROM pg_database WHERE datname='{ctx.pg.import_database}';", additional_options='-tA')
+    has_db = _execute_sql(
+        ctx, f"SELECT 1 FROM pg_database WHERE datname='{ctx.pg.import_database}';", additional_options="-tA"
+    )
     logging.info(f"log ========== '{has_db.stdout}'")
     if has_db.stdout != "1\n":
+        logging.info("creating databases")
         _execute_sql(ctx, f"CREATE DATABASE {ctx.pg.import_database};")
-        _execute_sql(ctx, db=ctx.pg.import_database, 
-        sql=f"""
+        _execute_sql(
+            ctx,
+            db=ctx.pg.import_database,
+            sql=f"""
 CREATE EXTENSION postgis;
 CREATE EXTENSION hstore;
 CREATE EXTENSION unaccent;
 CREATE EXTENSION fuzzystrmatch;
-CREATE EXTENSION osml10n;""")
+CREATE EXTENSION osml10n;""",
+        )
+
 
 @task
 def get_osm_data(ctx):
@@ -109,7 +113,9 @@ def import_natural_earth(ctx):
         && rm natural_earth_vector.sqlite.zip"
         )
 
-    pg_conn = f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    pg_conn = (
+        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    )
     ctx.run(
         f'PGCLIENTENCODING=LATIN1 ogr2ogr \
     -progress \
@@ -155,7 +161,9 @@ def import_lake(ctx):
             f"wget --progress=dot:giga -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson"
         )
 
-    pg_conn = f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    pg_conn = (
+        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    )
     ctx.run(
         f'PGCLIENTENCODING=UTF8 ogr2ogr \
     -f Postgresql \
@@ -234,10 +242,18 @@ def rotate_database(ctx):
     we first move the production database to a backup database, 
     then move the newly created import database to be the new production database
     """
-    logging.info(f'rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}')
-    _execute_sql(ctx, f"ALTER DATABASE {ctx.pg.database} RENAME TO {ctx.pg.backup_database};", db=ctx.pg.import_database)
-    logging.info(f'rotating database, moving {ctx.pg.import_database} -> {ctx.pg.database}')
-    _execute_sql(ctx, f"ALTER DATABASE {ctx.pg.import_database} RENAME TO {ctx.pg.database};", db=ctx.pg.backup_database)
+    logging.info(f"rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}")
+    _execute_sql(
+        ctx,
+        f"ALTER DATABASE {ctx.pg.database} RENAME TO {ctx.pg.backup_database};",
+        db=ctx.pg.import_database,
+    )
+    logging.info(f"rotating database, moving {ctx.pg.import_database} -> {ctx.pg.database}")
+    _execute_sql(
+        ctx,
+        f"ALTER DATABASE {ctx.pg.import_database} RENAME TO {ctx.pg.database};",
+        db=ctx.pg.backup_database,
+    )
 
 
 @task
@@ -269,17 +285,11 @@ def generate_tiles(ctx):
         }
         if tiles_layer == TilesLayer.BASEMAP:
             params.update(
-                {
-                    "generatorId": ctx.tiles.base_sources.generator,
-                    "storageId": ctx.tiles.base_sources.storage,
-                }
+                {"generatorId": ctx.tiles.base_sources.generator, "storageId": ctx.tiles.base_sources.storage}
             )
         elif tiles_layer == TilesLayer.POI:
             params.update(
-                {
-                    "generatorId": ctx.tiles.poi_sources.generator,
-                    "storageId": ctx.tiles.poi_sources.storage,
-                }
+                {"generatorId": ctx.tiles.poi_sources.generator, "storageId": ctx.tiles.poi_sources.storage}
             )
         else:
             raise Exception("invalid tiles_layer")
@@ -310,9 +320,7 @@ def generate_tiles(ctx):
         json_res = res.json()
         if "error" in json_res:
             # tilerator can return status 200 but an error inside the response, so we need to check it
-            raise Exception(
-                f"impossible to run tilerator job, error: {json_res['error']}"
-            )
+            raise Exception(f"impossible to run tilerator job, error: {json_res['error']}")
         logging.info(f"jobs: {res.json()}")
 
     if ctx.tiles.planet:
@@ -324,27 +332,17 @@ def generate_tiles(ctx):
         # since tilerator does not generate tiles if the parent tile is composed only of 1 element
         # it speed up greatly the tiles generation by not even trying to generate tiles for oceans (and desert)
         generate_tiles(
-            tiles_layer=TilesLayer.BASEMAP,
-            z=10,
-            from_zoom=10,
-            before_zoom=15,
-            check_previous_layer=True,
+            tiles_layer=TilesLayer.BASEMAP, z=10, from_zoom=10, before_zoom=15, check_previous_layer=True
         )
         # for the poi, we generate only tiles if we have a base tile on the level 13
         # Note: we check the level 13 and not 14 because the tilegeneration process is in the background
         # and we might not have finished all basemap 14th zoom level tiles when starting the poi generation
         # it's a bit of a trick but works fine
         generate_tiles(
-            tiles_layer=TilesLayer.POI,
-            z=14,
-            from_zoom=14,
-            before_zoom=15,
-            check_base_layer_level=13,
+            tiles_layer=TilesLayer.POI, z=14, from_zoom=14, before_zoom=15, check_base_layer_level=13
         )
     elif ctx.tiles.x and ctx.tiles.y and ctx.tiles.z:
-        logging.info(
-            f"generating tiles for {ctx.tiles.x} / {ctx.tiles.y}, z = {ctx.tiles.z}"
-        )
+        logging.info(f"generating tiles for {ctx.tiles.x} / {ctx.tiles.y}, z = {ctx.tiles.z}")
         generate_tiles(
             tiles_layer=TilesLayer.BASEMAP,
             x=ctx.tiles.x,
