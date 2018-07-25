@@ -235,6 +235,18 @@ def load_additional_data(ctx):
 
 
 @task
+def kill_all_access_to_main_db(ctx):
+    """
+    close all connections to the main database
+    """
+    _execute_sql(
+        ctx,
+        f"SELECT pg_terminate_backend (pid) FROM pg_stat_activity WHERE datname = '{ctx.pg.database}';",
+        db=ctx.pg.import_database,
+    )
+
+
+@task
 def rotate_database(ctx):
     """
     rotate the postgres database
@@ -242,6 +254,7 @@ def rotate_database(ctx):
     we first move the production database to a backup database, 
     then move the newly created import database to be the new production database
     """
+    kill_all_access_to_main_db(ctx)
     logging.info(f"rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}")
     _execute_sql(
         ctx,
