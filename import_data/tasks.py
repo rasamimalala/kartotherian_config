@@ -1,26 +1,35 @@
+import sys
 import logging
+import os.path
+from datetime import timedelta, datetime
+
+import requests
+import configparser
 import invoke
 from invoke import task
-import os.path
-import requests
-from enum import Enum
+from pydantic import BaseModel
+from pydantic.datetime_parse import parse_datetime
+
 
 logging.basicConfig(level=logging.INFO)
 
+class TilesLayer:
+    BASEMAP = 'basemap'
+    POI = 'poi'
 
 @task
 def get_osm_data(ctx):
     """
     download the osm file and store it in the input_data directory
     """
-    logging.info("downloading osm file {}")
+    logging.info("downloading osm file from %s", ctx.osm.url)
     file_name = os.path.basename(ctx.osm.url)
     ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --directory-prefix={ctx.data_dir}")
     new_osm_file = f"{ctx.data_dir}/{file_name}"
     if ctx.osm.file is not None and ctx.osm.file != new_osm_file:
         logging.warn(
-            "the osm variable has been configured to {ctx.osm_file},"
-            "but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}"
+            f"the osm variable has been configured to {ctx.osm_file}, "
+            f"but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}"
         )
     ctx.osm.file = new_osm_file
 
@@ -49,7 +58,7 @@ def load_basemap(ctx):
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.generated_files_dir}/diff/base -cachedir {ctx.generated_files_dir}/cache/base'
+  -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.BASEMAP} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.BASEMAP}'
     )
 
 
@@ -64,7 +73,7 @@ def load_poi(ctx):
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
   -optimize \
-  -diffdir {ctx.generated_files_dir}/diff/poi -cachedir {ctx.generated_files_dir}/cache/poi'
+  -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.POI} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.POI}'
     )
 
 
@@ -84,7 +93,7 @@ def run_sql_script(ctx):
 
 @task
 def import_natural_earth(ctx):
-    print("importing natural earth shapes in postgres")
+    logging.info("importing natural earth shapes in postgres")
     target_file = f"{ctx.data_dir}/natural_earth_vector.sqlite"
 
     if not os.path.isfile(target_file):
@@ -113,7 +122,7 @@ def import_natural_earth(ctx):
 
 @task
 def import_water_polygon(ctx):
-    print("importing water polygon shapes in postgres")
+    logging.info("importing water polygon shapes in postgres")
 
     target_file = f"{ctx.data_dir}/water_polygons.shp"
     if not os.path.isfile(target_file):
@@ -132,7 +141,7 @@ def import_water_polygon(ctx):
 
 @task
 def import_lake(ctx):
-    print("importing the lakes borders in postgres")
+    logging.info("importing the lakes borders in postgres")
 
     target_file = f"{ctx.data_dir}/lake_centerline.geojson"
     if not os.path.isfile(target_file):
@@ -155,7 +164,7 @@ def import_lake(ctx):
 
 @task
 def import_border(ctx):
-    print("importing the borders in postgres")
+    logging.info("importing the borders in postgres")
 
     target_file = f"{ctx.data_dir}/osmborder_lines.csv"
     if not os.path.isfile(target_file):
@@ -191,7 +200,7 @@ def run_post_sql_scripts(ctx):
     load the sql file with all the functions to generate the layers
     this file has been generated using https://github.com/QwantResearch/openmaptiles
     """
-    print("running postsql scripts")
+    logging.info("running postsql scripts")
     _run_sql_script(ctx, "generated_base.sql")
     _run_sql_script(ctx, "generated_poi.sql")
 
@@ -215,6 +224,74 @@ def load_additional_data(ctx):
     import_wikidata(ctx)
 
 
+def create_tiles_jobs(
+    ctx,
+    tiles_layer,
+    from_zoom,
+    before_zoom,
+    z,
+    x=None,
+    y=None,
+    check_previous_layer=False,
+    check_base_layer_level=None,
+    expired_tiles_filepath=None,
+):
+    params = {
+        "fromZoom": from_zoom,
+        "beforeZoom": before_zoom,
+        "keepJob": "true",
+        "parts": ctx.tiles.parts,
+        "deleteEmpty": "true",
+        "zoom": z,
+    }
+    if tiles_layer == TilesLayer.BASEMAP:
+        params.update(
+            {
+                "generatorId": ctx.tiles.base_sources.generator,
+                "storageId": ctx.tiles.base_sources.storage,
+            }
+        )
+    elif tiles_layer == TilesLayer.POI:
+        params.update(
+            {
+                "generatorId": ctx.tiles.poi_sources.generator,
+                "storageId": ctx.tiles.poi_sources.storage,
+            }
+        )
+    else:
+        raise Exception("invalid tiles_layer")
+
+    if x:
+        params["x"] = x
+    if y:
+        params["y"] = y
+    if check_previous_layer:
+        # this tells tilerator not to generate a tile if there is not tile at the previous zoom
+        # this saves a lots of time since we won't generate tiles on oceans
+        params["checkZoom"] = -1
+    if check_base_layer_level:
+        # this tells tilerator not to generate a tile if there is not tile at the previous zoom
+        # this saves a lots of time since we won't generate tiles on oceans
+        params["checkZoom"] = check_base_layer_level
+        params["sourceId"] = ctx.tiles.base_sources.storage
+    if expired_tiles_filepath:
+        params["filepath"] = expired_tiles_filepath
+
+    url = f"{ctx.tiles.tilerator_url}/add"
+
+    logging.info(f"posting a tilerator job on {url} with params: {params}")
+    res = requests.post(url, params=params)
+
+    res.raise_for_status()
+    json_res = res.json()
+    if "error" in json_res:
+        # tilerator can return status 200 but an error inside the response, so we need to check it
+        raise Exception(
+            f"impossible to run tilerator job, error: {json_res['error']}"
+        )
+    logging.info(f"jobs: {res.json()}")
+
+
 @task
 def generate_tiles(ctx):
     """
@@ -222,83 +299,22 @@ def generate_tiles(ctx):
 
     the Tiles generation process is handle in the background by tilerator
     """
-    TilesLayer = Enum("TilesLayer", "BASEMAP POI")
-
-    def generate_tiles(
-        tiles_layer,
-        from_zoom,
-        before_zoom,
-        z,
-        x=None,
-        y=None,
-        check_previous_layer=False,
-        check_base_layer_level=None,
-    ):
-        params = {
-            "fromZoom": from_zoom,
-            "beforeZoom": before_zoom,
-            "keepJob": "true",
-            "parts": ctx.tiles.parts,
-            "deleteEmpty": "true",
-            "zoom": z,
-        }
-        if tiles_layer == TilesLayer.BASEMAP:
-            params.update(
-                {
-                    "generatorId": ctx.tiles.base_sources.generator,
-                    "storageId": ctx.tiles.base_sources.storage,
-                }
-            )
-        elif tiles_layer == TilesLayer.POI:
-            params.update(
-                {
-                    "generatorId": ctx.tiles.poi_sources.generator,
-                    "storageId": ctx.tiles.poi_sources.storage,
-                }
-            )
-        else:
-            raise Exception("invalid tiles_layer")
-
-        if x:
-            params["x"] = x
-        if y:
-            params["y"] = y
-        if check_previous_layer:
-            # this tells tilerator not to generate a tile if there is not tile at the previous zoom
-            # this saves a lots of time since we won't generate tiles on oceans
-            params["checkZoom"] = -1
-        if check_base_layer_level:
-            # this tells tilerator not to generate a tile if there is not tile at the previous zoom
-            # this saves a lots of time since we won't generate tiles on oceans
-            params["checkZoom"] = check_base_layer_level
-            params["sourceId"] = ctx.tiles.base_sources.storage
-
-        url = ctx.tiles.tilerator_host
-        if ctx.tiles.tilerator_port:
-            url += f":{ctx.tiles.tilerator_port}"
-        url += "/add"
-
-        logging.info(f"posting a tilerator job on {url} with params: {params}")
-        res = requests.post(url, params=params)
-
-        res.raise_for_status()
-        json_res = res.json()
-        if "error" in json_res:
-            # tilerator can return status 200 but an error inside the response, so we need to check it
-            raise Exception(
-                f"impossible to run tilerator job, error: {json_res['error']}"
-            )
-        logging.info(f"jobs: {res.json()}")
-
     if ctx.tiles.planet:
         logging.info("generating tiles for the planet")
         # for the planet we tweak the tiles generation a bit to speed it up
         # we first generate all the tiles for the first levels
-        generate_tiles(tiles_layer=TilesLayer.BASEMAP, z=0, from_zoom=0, before_zoom=10)
+        create_tiles_jobs(
+            ctx,
+            tiles_layer=TilesLayer.BASEMAP,
+            z=0,
+            from_zoom=0,
+            before_zoom=10
+        )
         # from the zoom 10 we generate only the tiles if there is a parent tiles
         # since tilerator does not generate tiles if the parent tile is composed only of 1 element
         # it speed up greatly the tiles generation by not even trying to generate tiles for oceans (and desert)
-        generate_tiles(
+        create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.BASEMAP,
             z=10,
             from_zoom=10,
@@ -309,7 +325,8 @@ def generate_tiles(ctx):
         # Note: we check the level 13 and not 14 because the tilegeneration process is in the background
         # and we might not have finished all basemap 14th zoom level tiles when starting the poi generation
         # it's a bit of a trick but works fine
-        generate_tiles(
+        create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.POI,
             z=14,
             from_zoom=14,
@@ -320,7 +337,8 @@ def generate_tiles(ctx):
         logging.info(
             f"generating tiles for {ctx.tiles.x} / {ctx.tiles.y}, z = {ctx.tiles.z}"
         )
-        generate_tiles(
+        create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.BASEMAP,
             x=ctx.tiles.x,
             y=ctx.tiles.y,
@@ -328,7 +346,8 @@ def generate_tiles(ctx):
             from_zoom=ctx.tiles.base_from_zoom,
             before_zoom=ctx.tiles.base_before_zoom,
         )
-        generate_tiles(
+        create_tiles_jobs(
+            ctx,
             tiles_layer=TilesLayer.POI,
             x=ctx.tiles.x,
             y=ctx.tiles.y,
@@ -339,6 +358,99 @@ def generate_tiles(ctx):
     else:
         logging.info("no parameter given for tile generation, skipping it")
 
+
+@task
+def generate_expired_tiles(ctx, tiles_layer, from_zoom, before_zoom, expired_tiles):
+    logging.info("generating expired tiles from %s", expired_tiles)
+    create_tiles_jobs(
+        ctx,
+        tiles_layer=tiles_layer,
+        z=from_zoom,
+        from_zoom=from_zoom,
+        before_zoom=before_zoom,
+        expired_tiles_filepath=expired_tiles
+    )
+
+
+@task
+def init_osm_update(ctx):
+    """
+    Init osmosis folder with configuration files and
+    latest state.txt file before .pbf timestamp
+    """
+    logging.info("initializing osm update...")
+    session = requests.Session()
+
+    class OsmState(BaseModel):
+        """
+        ConfigParser uses lowercased keys
+        "sequenceNumber" from state.txt is renamed to "sequencenumber"
+        """
+        sequencenumber: int
+        timestamp: datetime
+
+    def get_state_url(sequence_number=None):
+        base_url = ctx.osm_update.replication_url
+        if sequence_number is None:
+            # Get last state.txt
+            return f'{base_url}/state.txt'
+        else:
+            return f'{base_url}' \
+                f'/{sequence_number // 1_000_000 :03d}' \
+                f'/{sequence_number // 1000 % 1000 :03d}' \
+                f'/{sequence_number % 1000 :03d}.state.txt'
+
+    def get_state(sequence_number=None):
+        url = get_state_url(sequence_number)
+        resp = session.get(url)
+        resp.raise_for_status()
+        # state file may contain escaped ':' in the timestamp
+        state_string = resp.text.replace('\:',':')
+        c = configparser.ConfigParser()
+        c.read_string('[root]\n'+state_string)
+        return OsmState(**c['root'])
+
+    # Init osmosis working directory
+    ctx.run(f'mkdir -p {ctx.update_tiles_dir}')
+    ctx.run(f'touch {ctx.update_tiles_dir}/download.lock')
+
+    raw_osm_datetime = ctx.run(f'osmconvert {ctx.osm.file} --out-timestamp').stdout
+    osm_datetime = parse_datetime(raw_osm_datetime)
+    # Rewind 2 hours as a precaution
+    osm_datetime -= timedelta(hours=2)
+
+    last_state = get_state()
+    sequence_number = last_state.sequencenumber
+    sequence_dt = last_state.timestamp
+
+    for i in range(ctx.osm_update.max_interations):
+        if sequence_dt < osm_datetime:
+            break
+        sequence_number -= 1
+        state = get_state(sequence_number)
+        sequence_dt = state.timestamp
+    else:
+        logging.error('Failed to init osm update. '
+            'Could not find a replication sequence before %s', osm_datetime)
+        return
+
+    state_url = get_state_url(sequence_number)
+    ctx.run(f'wget -q "{state_url}" -O {ctx.update_tiles_dir}/state.txt')
+
+    with open(f'{ctx.update_tiles_dir}/configuration.txt', 'w') as conf_file:
+        conf_file.write(f'baseUrl={ctx.osm_update.replication_url}\n')
+        conf_file.write(f'maxInterval={ctx.osm_update.max_interval}\n')
+
+
+@task
+def run_osm_update(ctx):
+    ctx.run(f'{ctx.main_dir}/config/import_data/osm_update.sh --config {ctx.main_dir}/config/imposm',
+        env={
+            'PG_CONNECTION_STRING':  f'postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}',
+            'OSMOSIS_WORKING_DIR': ctx.update_tiles_dir,
+            'IMPOSM_DATA_DIR': ctx.generated_files_dir,
+        }
+    )
 
 @task(default=True)
 def load_all(ctx):
@@ -354,3 +466,4 @@ def load_all(ctx):
     load_additional_data(ctx)
     run_post_sql_scripts(ctx)
     generate_tiles(ctx)
+    init_osm_update(ctx)
