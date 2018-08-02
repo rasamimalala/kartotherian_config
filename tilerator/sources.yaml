@@ -4,9 +4,9 @@
 gen-lite:
   public: true
   formats: [pbf]
-  uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_lite.xml"
-  xmlSetDataSource:
+  uri: tmsource://
+  yaml: "/etc/tilerator/data_tm2source_lite.yml"
+  yamlSetDataSource:
     if:
       dbname: gis
       host: 'localhost'
@@ -36,6 +36,7 @@ v2-lite:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    copyInfoFrom: {ref: gen-lite}
 
 oz-lite:
   public: true
@@ -49,9 +50,9 @@ oz-lite:
 gen_basemap:
   public: true
   formats: [pbf]
-  uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_base.xml"
-  xmlSetDataSource:
+  uri: tmsource://
+  yaml: "/etc/tilerator/data_tm2source_base.yml"
+  yamlSetDataSource:
     if:
       dbname: gis
       host: 'localhost'
@@ -74,6 +75,7 @@ basemap:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
+    copyInfoFrom: {ref: gen_basemap}
 
 substbasemap:  # only for basemap
   public: true
@@ -89,9 +91,9 @@ substbasemap:  # only for basemap
 gen_poi:
   public: true
   formats: [pbf]
-  uri: bridge://
-  xml: "/etc/tilerator/data_tm2source_poi.xml"
-  xmlSetDataSource:
+  uri: tmsource://
+  yaml: "/etc/tilerator/data_tm2source_poi.yml"
+  yamlSetDataSource:
     if:
       dbname: gis
       host: 'localhost'
@@ -115,4 +117,4 @@ poi:
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
-
+    copyInfoFrom: {ref: gen_poi}
