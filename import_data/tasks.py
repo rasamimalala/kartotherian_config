@@ -17,6 +17,39 @@ class TilesLayer:
     BASEMAP = 'basemap'
     POI = 'poi'
 
+def _execute_sql(ctx, sql, db=None, additional_options=""):
+    query = f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -c "{sql}" {additional_options}'
+    if db is not None:
+        query += f" -d {db}"
+    return ctx.run(query, env={"PGPASSWORD": ctx.pg.password})
+
+def _db_exists(ctx, db_name):
+    has_db = _execute_sql(
+        ctx, f"SELECT 1 FROM pg_database WHERE datname='{db_name}';", additional_options="-tA"
+    )
+    return has_db.stdout == "1\n"
+
+@task
+def prepare_db(ctx):
+    """
+    creates the import database and remove the old backup one
+    """
+    _execute_sql(ctx, f"DROP DATABASE IF EXISTS {ctx.pg.backup_database};")
+    if not _db_exists(ctx, ctx.pg.import_database):
+        logging.info("creating databases")
+        _execute_sql(ctx, f"CREATE DATABASE {ctx.pg.import_database};")
+        _execute_sql(
+            ctx,
+            db=ctx.pg.import_database,
+            sql=f"""
+CREATE EXTENSION postgis;
+CREATE EXTENSION hstore;
+CREATE EXTENSION unaccent;
+CREATE EXTENSION fuzzystrmatch;
+CREATE EXTENSION osml10n;""",
+        )
+
+
 @task
 def get_osm_data(ctx):
     """
@@ -35,24 +68,11 @@ def get_osm_data(ctx):
 
 
 @task
-def cleanup_db_backup(ctx):
-    """
-    If there is a backup schema imposm cannot delete the tables in to 
-    (with the -deployproduction), so we delete them to be able to reload the data several times
-    """
-    remove_backup = "DROP SCHEMA IF EXISTS backup CASCADE;"
-    ctx.run(
-        f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} -c "{remove_backup}"',
-        env={"PGPASSWORD": ctx.pg.password},
-    )
-
-
-@task
 def load_basemap(ctx):
     ctx.run(
         f'time imposm3 \
   import \
-  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
+  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.import_database}" \
   -read {ctx.osm.file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
@@ -67,7 +87,7 @@ def load_poi(ctx):
     ctx.run(
         f'time imposm3 \
   import \
-  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}" \
+  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.import_database}" \
   -read {ctx.osm.file} \
   -diff \
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
@@ -79,7 +99,7 @@ def load_poi(ctx):
 
 def _run_sql_script(ctx, script_name):
     ctx.run(
-        f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} --set ON_ERROR_STOP='1' -f {ctx.sql_dir}/{script_name}",
+        f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.import_database} --set ON_ERROR_STOP='1' -f {ctx.sql_dir}/{script_name}",
         env={"PGPASSWORD": ctx.pg.password},
     )
 
@@ -103,7 +123,9 @@ def import_natural_earth(ctx):
         && rm natural_earth_vector.sqlite.zip"
         )
 
-    pg_conn = f"dbname={ctx.pg.database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    pg_conn = (
+        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    )
     ctx.run(
         f'PGCLIENTENCODING=LATIN1 ogr2ogr \
     -progress \
@@ -134,7 +156,7 @@ def import_water_polygon(ctx):
 
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DATA_DIR={ctx.data_dir} \
-  POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.database} POSTGRES_USER={ctx.pg.user} \
+  POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
   {ctx.main_dir}/import-water.sh"
     )
 
@@ -149,7 +171,9 @@ def import_lake(ctx):
             f"wget --progress=dot:giga -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson"
         )
 
-    pg_conn = f"dbname={ctx.pg.database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    pg_conn = (
+        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
+    )
     ctx.run(
         f'PGCLIENTENCODING=UTF8 ogr2ogr \
     -f Postgresql \
@@ -175,7 +199,7 @@ def import_border(ctx):
 
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DIR={ctx.data_dir} \
-  POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.database} POSTGRES_USER={ctx.pg.user} \
+  POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
   {ctx.main_dir}/import_osmborder_lines.sh"
     )
 
@@ -188,10 +212,7 @@ def import_wikidata(ctx):
     For the moment this does nothing (but we need a table for some openmaptiles function)
     """
     create_table = "CREATE TABLE IF NOT EXISTS wd_names (id varchar(20) UNIQUE, page varchar(200) UNIQUE, labels hstore);"
-    ctx.run(
-        f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.database} -c "{create_table}"',
-        env={"PGPASSWORD": ctx.pg.password},
-    )
+    _execute_sql(ctx, db=ctx.pg.import_database, sql=create_table)
 
 
 @task
@@ -209,7 +230,6 @@ def run_post_sql_scripts(ctx):
 def load_osm(ctx):
     if ctx.osm.url:
         get_osm_data(ctx)
-    cleanup_db_backup(ctx)
     load_basemap(ctx)
     load_poi(ctx)
     run_sql_script(ctx)
@@ -290,6 +310,45 @@ def create_tiles_jobs(
             f"impossible to run tilerator job, error: {json_res['error']}"
         )
     logging.info(f"jobs: {res.json()}")
+
+
+@task
+def kill_all_access_to_main_db(ctx):
+    """
+    close all connections to the main database
+    """
+    logging.info(f"killing all connections to the main database")
+    _execute_sql(
+        ctx,
+        f"SELECT pid, pg_terminate_backend (pid) FROM pg_stat_activity WHERE datname = '{ctx.pg.database}';",
+        db=ctx.pg.import_database,
+    )
+
+
+@task
+def rotate_database(ctx):
+    """
+    rotate the postgres database
+    
+    we first move the production database to a backup database, 
+    then move the newly created import database to be the new production database
+    """
+    if not _db_exists(ctx, ctx.pg.import_database):
+        return
+    kill_all_access_to_main_db(ctx)
+    if _db_exists(ctx, ctx.pg.database):
+        logging.info(f"rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}")
+        _execute_sql(
+            ctx,
+            f"ALTER DATABASE {ctx.pg.database} RENAME TO {ctx.pg.backup_database};",
+            db=ctx.pg.import_database,
+        )
+    logging.info(f"rotating database, moving {ctx.pg.import_database} -> {ctx.pg.database}")
+    _execute_sql(
+        ctx,
+        f"ALTER DATABASE {ctx.pg.import_database} RENAME TO {ctx.pg.database};",
+        db=ctx.pg.backup_database,
+    )
 
 
 @task
@@ -462,8 +521,10 @@ def load_all(ctx):
     if not ctx.osm.file and not ctx.osm.url:
         raise Exception("you should provide a osm.file variable or osm.url variable")
 
+    prepare_db(ctx)
     load_osm(ctx)
     load_additional_data(ctx)
     run_post_sql_scripts(ctx)
+    rotate_database(ctx)
     generate_tiles(ctx)
     init_osm_update(ctx)
