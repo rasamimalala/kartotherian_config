@@ -8,9 +8,7 @@ v2-lite:
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
     password: {var: cassandra-pswd}
-    repfactor: 4
-    durablewrite: 0
-    createIfMissing: true
+    createIfMissing: false
     setLastModified: true
 
 oz-lite:
@@ -33,9 +31,7 @@ basemap:
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
     password: {var: cassandra-pswd}
-    repfactor: 4
-    durablewrite: 0
-    createIfMissing: true
+    createIfMissing: false
     setLastModified: true
 
 ozbasemap:
@@ -59,9 +55,7 @@ poi:
     cp: {var: cassandra-servers}
     username: {var: cassandra-user}
     password: {var: cassandra-pswd}
-    repfactor: 4
-    durablewrite: 0
-    createIfMissing: true
+    createIfMissing: false
     setLastModified: true
 
 ozpoi:
