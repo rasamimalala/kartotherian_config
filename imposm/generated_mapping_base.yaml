@@ -1,27 +1,25 @@
 generalized_tables:
-  aerialway_linestring_gen1: {source: aerialway_linestring, tolerance: 19.10925707129407}
-  aeroway_linestring_gen1: {source: aeroway_linestring, tolerance: 19.10925707129407}
+  aerialway_linestring_gen1: {source: aerialway_linestring, sql_filter: ST_IsValid(geometry),
+    tolerance: 19.10925707129407}
+  aeroway_linestring_gen1: {source: aeroway_linestring, sql_filter: ST_IsValid(geometry),
+    tolerance: 19.10925707129407}
   aeroway_linestring_gen2: {source: aeroway_linestring_gen1, tolerance: 38.21851414258814}
   aeroway_linestring_gen3: {source: aeroway_linestring_gen2, tolerance: 76.43702828517628}
-  aeroway_polygon_gen1: {source: aeroway_polygon, sql_filter: 'area>power(38.21851414258814,2)',
-    tolerance: 19.10925707129407}
+  aeroway_polygon_gen1: {source: aeroway_polygon, sql_filter: 'area>power(38.21851414258814,2)
+      AND ST_IsValid(geometry)', tolerance: 19.10925707129407}
   aeroway_polygon_gen2: {source: aeroway_polygon_gen1, sql_filter: 'area>power(76.43702828517628,2)',
     tolerance: 38.21851414258814}
   aeroway_polygon_gen3: {source: aeroway_polygon_gen2, sql_filter: 'area>power(152.87405657035256,2)',
     tolerance: 76.43702828517628}
-  boundary_linestring_gen1: {source: boundary_linestring, tolerance: 19.10925707129407}
-  boundary_linestring_gen2: {source: boundary_linestring, tolerance: 38.21851414258814}
-  boundary_linestring_gen3: {source: boundary_linestring, tolerance: 76.43702828517628}
-  boundary_linestring_gen4: {source: boundary_linestring, tolerance: 152.87405657035256}
-  boundary_linestring_gen5: {source: boundary_linestring, tolerance: 305.74811314070513}
   highway_linestring_gen1: {source: highway_linestring, sql_filter: 'highway IN (''motorway'',
       ''trunk'', ''primary'', ''secondary'', ''tertiary'', ''motorway_link'', ''trunk_link'',
-      ''primary_link'', ''secondary_link'', ''tertiary_link'') AND NOT is_area', tolerance: 38.21851414258814}
+      ''primary_link'', ''secondary_link'', ''tertiary_link'') AND NOT is_area AND
+      ST_IsValid(geometry)', tolerance: 38.21851414258814}
   highway_linestring_gen2: {source: highway_linestring_gen1, sql_filter: 'highway
       IN (''motorway'', ''trunk'', ''primary'', ''secondary'', ''motorway_link'',
       ''trunk_link'', ''primary_link'', ''secondary_link'') AND NOT is_area', tolerance: 76.43702828517628}
-  landcover_polygon_gen1: {source: landcover_polygon, sql_filter: 'area>power(152.87405657035256,2)',
-    tolerance: 19.10925707129407}
+  landcover_polygon_gen1: {source: landcover_polygon, sql_filter: 'area>power(152.87405657035256,2)
+      AND ST_IsValid(geometry)', tolerance: 19.10925707129407}
   landcover_polygon_gen2: {source: landcover_polygon_gen1, sql_filter: 'area>power(305.74811314070513,2)',
     tolerance: 38.21851414258814}
   landcover_polygon_gen3: {source: landcover_polygon_gen2, sql_filter: 'area>power(611.4962262814103,2)',
@@ -34,8 +32,8 @@ generalized_tables:
     tolerance: 611.4962262814103}
   landcover_polygon_gen7: {source: landcover_polygon_gen6, sql_filter: 'area>power(4891.969810251282,2)',
     tolerance: 1222.9924525628205}
-  landuse_polygon_gen1: {source: landuse_polygon, sql_filter: 'area>power(76.43702828517628,2)',
-    tolerance: 19.10925707129407}
+  landuse_polygon_gen1: {source: landuse_polygon, sql_filter: 'area>power(76.43702828517628,2)
+      AND ST_IsValid(geometry)', tolerance: 19.10925707129407}
   landuse_polygon_gen2: {source: landuse_polygon_gen1, sql_filter: 'area>power(152.87405657035256,2)',
     tolerance: 38.21851414258814}
   landuse_polygon_gen3: {source: landuse_polygon_gen2, sql_filter: 'area>power(305.74811314070513,2)',
@@ -44,8 +42,8 @@ generalized_tables:
     tolerance: 152.87405657035256}
   landuse_polygon_gen5: {source: landuse_polygon_gen4, sql_filter: 'area>power(1222.9924525628205,2)',
     tolerance: 305.74811314070513}
-  park_polygon_gen1: {source: park_polygon, sql_filter: 'area>power(38.21851414258814,2)',
-    tolerance: 19.10925707129407}
+  park_polygon_gen1: {source: park_polygon, sql_filter: 'area>power(38.21851414258814,2)
+      AND ST_IsValid(geometry)', tolerance: 19.10925707129407}
   park_polygon_gen2: {source: park_polygon_gen1, sql_filter: 'area>power(76.43702828517628,2)',
     tolerance: 38.21851414258814}
   park_polygon_gen3: {source: park_polygon_gen2, sql_filter: 'area>power(152.87405657035256,2)',
@@ -58,18 +56,20 @@ generalized_tables:
     tolerance: 305.74811314070513}
   park_polygon_gen7: {source: park_polygon_gen6, sql_filter: 'area>power(2445.984905125641,2)',
     tolerance: 611.4962262814103}
-  park_polygon_gen8: {source: park_polygon_gen6, sql_filter: 'area>power(4891.969810251282,2)',
+  park_polygon_gen8: {source: park_polygon_gen7, sql_filter: 'area>power(4891.969810251282,2)',
     tolerance: 611.4962262814103}
   railway_linestring_gen1: {source: railway_linestring, sql_filter: 'railway IN (''rail'',
-      ''narrow_gauge'', ''light_rail'') AND service=''''', tolerance: 19.10925707129407}
+      ''narrow_gauge'', ''light_rail'') AND service='''' AND ST_IsValid(geometry)',
+    tolerance: 19.10925707129407}
   railway_linestring_gen2: {source: railway_linestring_gen1, tolerance: 38.21851414258814}
   railway_linestring_gen3: {source: railway_linestring_gen2, tolerance: 76.43702828517628}
   railway_linestring_gen4: {source: railway_linestring_gen3, tolerance: 152.87405657035256}
   railway_linestring_gen5: {source: railway_linestring_gen4, tolerance: 305.74811314070513}
-  shipway_linestring_gen1: {source: shipway_linestring, tolerance: 19.10925707129407}
+  shipway_linestring_gen1: {source: shipway_linestring, sql_filter: ST_IsValid(geometry),
+    tolerance: 19.10925707129407}
   shipway_linestring_gen2: {source: shipway_linestring_gen1, tolerance: 38.21851414258814}
-  water_polygon_gen1: {source: water_polygon, sql_filter: 'area>power(152.87405657035256,2)',
-    tolerance: 38.21851414258814}
+  water_polygon_gen1: {source: water_polygon, sql_filter: 'area>power(152.87405657035256,2)
+      AND ST_IsValid(geometry)', tolerance: 38.21851414258814}
   water_polygon_gen2: {source: water_polygon_gen1, sql_filter: 'area>power(305.74811314070513,2)',
     tolerance: 76.43702828517628}
   water_polygon_gen3: {source: water_polygon_gen2, sql_filter: 'area>power(611.4962262814103,2)',
@@ -81,7 +81,7 @@ generalized_tables:
   water_polygon_gen6: {source: water_polygon_gen5, sql_filter: 'area>power(4891.969810251282,2)',
     tolerance: 1222.9924525628205}
   waterway_linestring_gen1: {source: waterway_linestring, sql_filter: waterway IN
-      ('river'), tolerance: 76.43702828517628}
+      ('river') AND ST_IsValid(geometry), tolerance: 76.43702828517628}
   waterway_linestring_gen2: {source: waterway_linestring_gen1, sql_filter: waterway
       IN ('river'), tolerance: 152.87405657035256}
   waterway_linestring_gen3: {source: waterway_linestring_gen2, sql_filter: waterway
@@ -102,7 +102,7 @@ tables:
     - &id014 {key: bridge, name: is_bridge, type: bool}
     - &id015 {key: ramp, name: is_ramp, type: bool}
     - &id016 {key: ford, name: is_ford, type: bool}
-    - &id017 {key: oneway, name: is_oneway, type: bool}
+    - &id017 {key: oneway, name: is_oneway, type: direction}
     - &id018 {key: area, name: is_area, type: bool}
     - &id019 {key: service, name: service, type: string}
     - &id020 {key: usage, name: usage, type: string}
@@ -150,19 +150,6 @@ tables:
       aeroway: &id002 [aerodrome, heliport, runway, helipad, taxiway, apron]
       area:aeroway: *id002
     type: polygon
-  boundary_linestring:
-    fields:
-    - {name: osm_id, type: id}
-    - {name: geometry, type: geometry}
-    - {key: admin_level, name: admin_level, type: integer}
-    filters:
-      reject:
-        natural: [coastline]
-      require:
-        admin_level: [__any__]
-    mapping:
-      boundary: [administrative]
-    type: linestring
   building_associatedstreet:
     fields:
     - {name: osm_id, type: id}
@@ -218,6 +205,7 @@ tables:
       reject:
         building: ['no', none, 'No']
         building:part: ['no', none, 'No']
+        man_made: [bridge]
     mapping:
       type: [multipolygon]
     type: relation_member
@@ -241,6 +229,7 @@ tables:
       reject:
         building: ['no', none, 'No']
         building:part: ['no', none, 'No']
+        man_made: [bridge]
     mapping:
       aeroway: [terminal, hangar]
       building: [__any__]
@@ -401,8 +390,10 @@ tables:
     - *id022
     - {key: area, name: is_area, type: bool}
     - *id023
+    - {key: man_made, name: man_made, type: string}
     mapping:
       highway: [path, cycleway, bridleway, footway, corridor, pedestrian, steps]
+      man_made: [bridge]
       public_transport: [platform]
     type: polygon
   housenumber_point:
@@ -462,7 +453,7 @@ tables:
       landuse: [allotments, farm, farmland, orchard, plant_nursery, vineyard, grass,
         grassland, meadow, forest, village_green, recreation_ground, park]
       leisure: [park, garden]
-      natural: [wood, wetland, grassland, glacier, bare_rock, scree]
+      natural: [wood, wetland, grassland, glacier, bare_rock, scree, beach, sand]
       wetland: [bog, swamp, wet_meadow, marsh, reedbed, saltern, tidalflat, saltmarsh,
         mangrove]
     type: polygon
@@ -473,13 +464,15 @@ tables:
     - {key: landuse, name: landuse, type: string}
     - {key: amenity, name: amenity, type: string}
     - {key: leisure, name: leisure, type: string}
+    - {key: tourism, name: tourism, type: string}
     - {name: area, type: area}
     - {name: webmerc_area, type: webmerc_area}
     mapping:
-      amenity: [school, university, kindergarten, college, library, hospital]
+      amenity: [bus_station, school, university, kindergarten, college, library, hospital]
       landuse: [railway, cemetery, military, residential, commercial, industrial,
         retail]
       leisure: [stadium, pitch, playground]
+      tourism: [theme_park, zoo]
     type: polygon
   marine_point:
     fields:
@@ -632,6 +625,8 @@ tables:
     - {key: 'name:en', name: name_en, type: string}
     - {key: 'name:de', name: name_de, type: string}
     - {name: tags, type: hstore_tags}
+    - {key: tunnel, name: is_tunnel, type: bool}
+    - {key: bridge, name: is_bridge, type: bool}
     mapping:
       waterway: [stream, river, canal, drain, ditch]
     type: linestring
@@ -643,7 +638,6 @@ tags:
     'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb',
     'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt',
     'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn',
-    'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name,
-    wikidata, wikipedia]
+    'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name]
 
 use_single_id_space: true

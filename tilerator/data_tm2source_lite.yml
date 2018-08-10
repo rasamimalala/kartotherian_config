@@ -31,7 +31,7 @@ Layer:
     srid: 900913
     table: (SELECT geometry, name, name_en, name_de, NULLIF(tags->'name_int', '')
       AS "name_int", NULLIF(tags->'name:latin', '') AS "name:latin", NULLIF(tags->'name:nonlatin',
-      '') AS "name:nonlatin", class FROM layer_waterway(!bbox!, z(!scale_denominator!)))
+      '') AS "name:nonlatin", class, brunnel FROM layer_waterway(!bbox!, z(!scale_denominator!)))
       AS t
     type: postgis
     user: nice_user
