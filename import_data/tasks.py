@@ -80,6 +80,7 @@ def load_basemap(ctx):
   -mapping {ctx.main_dir}/generated_mapping_base.yaml \
   -deployproduction -overwritecache \
   -optimize \
+  -quiet \
   -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.BASEMAP} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.BASEMAP}'
     )
 
@@ -95,6 +96,7 @@ def load_poi(ctx):
   -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
   -deployproduction -overwritecache \
   -optimize \
+  -quiet \
   -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.POI} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.POI}'
     )
 
