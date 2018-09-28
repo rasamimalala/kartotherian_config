@@ -52,6 +52,47 @@ CREATE EXTENSION osml10n;""",
         )
 
 
+def _read_md5(md5_response):
+    """the md5 response is usualy "{md5} {name of file}", so we get only the first field"""
+    return next(iter(md5_response.split(' ')), None)
+
+
+def _get_remote_md5(url):
+    """
+    try geting a remote file with the same url name + 'md5' and return the md5 field of the response
+    """
+    md5_url = f'{url}.md5'
+    md5_response = requests.get(md5_url)
+    if md5_response.status_code != 200:
+        return None
+    return _read_md5(md5_response.text)
+
+
+def _compute_md5(ctx, file):
+    r = ctx.run(f"md5sum {file}").stdout
+    return _read_md5(r)
+
+
+def _needs_to_download(ctx, file, url):
+    """
+    check if a file already exists in the directory
+    if it's the case, check if we need a more up to date file (by comparing the md5)
+    and if so, clean the old file
+    """
+    if not os.path.isfile(file):
+        return True
+    # the file already exists, we check the md5 to see if we need to download it again
+    remote_md5 = _get_remote_md5(url)
+    existing_file_md5 = _compute_md5(ctx, file)
+    logging.info(f"existing md5 = {existing_file_md5}, remote md5 = {remote_md5}")
+    if not remote_md5 or remote_md5 != existing_file_md5:
+        logging.warn(f"file {file} already exists, but is not up to date, removing old file")
+        os.remove(file)
+        return True
+    logging.warn(f"file {file} already exists and is up to date, we don't need to download it again")
+    return False
+
+
 @task
 def get_osm_data(ctx):
     """
@@ -59,14 +100,19 @@ def get_osm_data(ctx):
     """
     logging.info("downloading osm file from %s", ctx.osm.url)
     file_name = os.path.basename(ctx.osm.url)
-    ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --directory-prefix={ctx.data_dir}")
-    new_osm_file = f"{ctx.data_dir}/{file_name}"
+
+    new_osm_file = os.path.join(ctx.data_dir, file_name)
     if ctx.osm.file is not None and ctx.osm.file != new_osm_file:
         logging.warn(
             f"the osm variable has been configured to {ctx.osm_file}, "
             f"but this will not be taken into account as we will use a newly downloaded file: {new_osm_file}"
         )
     ctx.osm.file = new_osm_file
+
+    if not _needs_to_download(ctx, new_osm_file, ctx.osm.url):
+        return
+
+    ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --output-document={new_osm_file}")
 
 
 @task
