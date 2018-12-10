@@ -41,8 +41,9 @@ Layer:
       '') AS "name:th", NULLIF(tags->'name:tr', '') AS "name:tr", NULLIF(tags->'name:uk',
       '') AS "name:uk", NULLIF(tags->'name:zh', '') AS "name:zh", NULLIF(tags->'name_int',
       '') AS "name_int", NULLIF(tags->'name:latin', '') AS "name:latin", NULLIF(tags->'name:nonlatin',
-      '') AS "name:nonlatin", class, subclass, agg_stop, rank, tags::json::text as
-      tags FROM layer_poi(!bbox!, z(!scale_denominator!), !pixel_width!)) AS t
+      '') AS "name:nonlatin", class, subclass, agg_stop, layer, level, indoor, rank,
+      tags::json::text as tags FROM layer_poi(!bbox!, z(!scale_denominator!), !pixel_width!))
+      AS t
     type: postgis
     user: nice_user
   id: poi

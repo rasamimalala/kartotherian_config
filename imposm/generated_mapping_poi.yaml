@@ -15,6 +15,10 @@ tables:
     - {key: information, name: information, type: string}
     - {key: uic_ref, name: uic_ref, type: string}
     - {key: religion, name: religion, type: string}
+    - {key: level, name: level, type: integer}
+    - {key: indoor, name: indoor, type: bool}
+    - {key: layer, name: layer, type: integer}
+    - {key: sport, name: sport, type: string}
     mapping:
       aerialway: &id001 [station]
       amenity: &id002 [arts_centre, bank, bar, bbq, bicycle_rental, biergarten, bus_station,
@@ -55,9 +59,9 @@ tables:
         rugby_league, rugby_union, running, sailing, scuba_diving, shooting, shooting_range,
         skateboard, skating, skiing, soccer, surfing, swimming, table_soccer, table_tennis,
         team_handball, tennis, toboggan, volleyball, water_ski, yoga]
-      tourism: &id011 [alpine_hut, artwork, attraction, bed_and_breakfast, camp_site,
-        caravan_site, chalet, gallery, guest_house, hostel, hotel, information, motel,
-        museum, picnic_site, theme_park, viewpoint, zoo]
+      tourism: &id011 [alpine_hut, aquarium, artwork, attraction, bed_and_breakfast,
+        camp_site, caravan_site, chalet, gallery, guest_house, hostel, hotel, information,
+        motel, museum, picnic_site, theme_park, viewpoint, zoo]
       waterway: &id012 [dock]
     type: point
   poi_polygon:
@@ -75,6 +79,10 @@ tables:
     - {key: information, name: information, type: string}
     - {key: uic_ref, name: uic_ref, type: string}
     - {key: religion, name: religion, type: string}
+    - {key: level, name: level, type: integer}
+    - {key: indoor, name: indoor, type: bool}
+    - {key: layer, name: layer, type: integer}
+    - {key: sport, name: sport, type: string}
     mapping:
       aerialway: *id001
       amenity: *id002
