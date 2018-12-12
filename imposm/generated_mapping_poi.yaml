@@ -98,15 +98,9 @@ tables:
       waterway: *id012
     type: polygon
 tags:
-  include: ['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca',
-    'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es',
-    'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr',
-    'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm',
-    'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb',
-    'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt',
-    'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn',
-    'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', int_name, loc_name, name,
-    wikidata, wikipedia]
+  include: ['name:br', 'name:ca', 'name:co', 'name:cs', 'name:de', 'name:en', 'name:eo',
+    'name:es', 'name:eu', 'name:fr', 'name:it', 'name:la', 'name:nl', 'name:oc', 'name:pl',
+    'name:pt', 'name:ru', int_name, loc_name, name, wikidata, wikipedia]
   load_all: true
 
 use_single_id_space: true

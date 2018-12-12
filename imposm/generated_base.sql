@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION slice_language_tags(tags hstore)
 RETURNS hstore AS $$
-    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
+    SELECT delete_empty_keys(slice(tags, ARRAY['name:br', 'name:ca', 'name:co', 'name:cs', 'name:de', 'name:en', 'name:eo', 'name:es', 'name:eu', 'name:fr', 'name:it', 'name:la', 'name:nl', 'name:oc', 'name:pl', 'name:pt', 'name:ru', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer water'; END$$;CREATE OR REPLACE FUNCTION water_class(waterway TEXT) RETURNS TEXT AS $$
     SELECT CASE
@@ -660,84 +660,6 @@ RETURNS TABLE(osm_id bigint, geometry geometry, class text) AS $$
         SELECT * FROM landuse_z14 WHERE zoom_level >= 14
     ) AS zoom_levels
     WHERE geometry && bbox;
-$$ LANGUAGE SQL IMMUTABLE;
-DO $$ BEGIN RAISE NOTICE 'Layer mountain_peak'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_peak_point;
-DROP TRIGGER IF EXISTS trigger_refresh ON mountain_peak_point.updates;
-
--- etldoc:  osm_peak_point ->  osm_peak_point
-CREATE OR REPLACE FUNCTION update_osm_peak_point() RETURNS VOID AS $$
-BEGIN
-  UPDATE osm_peak_point
-  SET tags = update_tags(tags, geometry)
-  WHERE COALESCE(tags->'name:latin', tags->'name:nonlatin', tags->'name_int') IS NULL;
-
-END;
-$$ LANGUAGE plpgsql;
-
-SELECT update_osm_peak_point();
-
--- Handle updates
-
-CREATE SCHEMA IF NOT EXISTS mountain_peak_point;
-
-CREATE TABLE IF NOT EXISTS mountain_peak_point.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION mountain_peak_point.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO mountain_peak_point.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION mountain_peak_point.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh mountain_peak_point';
-    PERFORM update_osm_peak_point();
-    DELETE FROM mountain_peak_point.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag
-    AFTER INSERT OR UPDATE OR DELETE ON osm_peak_point
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE mountain_peak_point.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON mountain_peak_point.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE mountain_peak_point.refresh();
-
--- etldoc: layer_mountain_peak[shape=record fillcolor=lightpink,
--- etldoc:     style="rounded,filled", label="layer_mountain_peak | <z7_> z7+" ] ;
-
-CREATE OR REPLACE FUNCTION layer_mountain_peak(bbox geometry, zoom_level integer, pixel_width numeric)
-RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text, name_de text, tags hstore, ele int, ele_ft int, "rank" int) AS $$
-   -- etldoc: osm_peak_point -> layer_mountain_peak:z7_
-   SELECT osm_id, geometry, name, name_en, name_de, tags, ele::int, ele_ft::int, rank::int
-   FROM (
-     SELECT osm_id, geometry, name,
-     COALESCE(NULLIF(name_en, ''), name) AS name_en,
-     COALESCE(NULLIF(name_de, ''), name, name_en) AS name_de,
-     tags,
-     substring(ele from E'^(-?\\d+)(\\D|$)')::int AS ele,
-     round(substring(ele from E'^(-?\\d+)(\\D|$)')::int*3.2808399)::int AS ele_ft,
-       row_number() OVER (
-           PARTITION BY LabelGrid(geometry, 100 * pixel_width)
-           ORDER BY (
-             substring(ele from E'^(-?\\d+)(\\D|$)')::int +
-             (CASE WHEN NULLIF(wikipedia, '') is not null THEN 10000 ELSE 0 END) +
-             (CASE WHEN NULLIF(name, '') is not null THEN 10000 ELSE 0 END)
-           ) DESC
-       )::int AS "rank"
-     FROM osm_peak_point
-     WHERE geometry && bbox AND ele is not null AND ele ~ E'^-?\\d+'
-   ) AS ranked_peaks
-   WHERE zoom_level >= 7 AND (rank <= 5 OR zoom_level >= 14)
-   ORDER BY "rank" ASC;
-
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer park'; END$$;ALTER TABLE osm_park_polygon ADD COLUMN IF NOT EXISTS geometry_point geometry;
 ALTER TABLE osm_park_polygon_gen1 ADD COLUMN IF NOT EXISTS geometry_point geometry;
@@ -3152,67 +3074,6 @@ RETURNS TABLE(osm_id bigint, geometry geometry, name text, name_en text,
     UNION ALL
     SELECT * FROM layer_place(bbox, 14, pixel_width)
         WHERE zoom_level >= 13
-$$ LANGUAGE SQL IMMUTABLE;
-DO $$ BEGIN RAISE NOTICE 'Layer housenumber'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_housenumber_point;
-DROP TRIGGER IF EXISTS trigger_refresh ON housenumber.updates;
-
--- etldoc: osm_housenumber_point -> osm_housenumber_point
-CREATE OR REPLACE FUNCTION convert_housenumber_point() RETURNS VOID AS $$
-BEGIN
-  UPDATE osm_housenumber_point
-  SET geometry =
-           CASE WHEN ST_NPoints(ST_ConvexHull(geometry))=ST_NPoints(geometry)
-           THEN ST_Centroid(geometry)
-           ELSE ST_PointOnSurface(geometry)
-    END
-  WHERE ST_GeometryType(geometry) <> 'ST_Point';
-END;
-$$ LANGUAGE plpgsql;
-
-SELECT convert_housenumber_point();
-
--- Handle updates
-
-CREATE SCHEMA IF NOT EXISTS housenumber;
-
-CREATE TABLE IF NOT EXISTS housenumber.updates(id serial primary key, t text, unique (t));
-CREATE OR REPLACE FUNCTION housenumber.flag() RETURNS trigger AS $$
-BEGIN
-    INSERT INTO housenumber.updates(t) VALUES ('y')  ON CONFLICT(t) DO NOTHING;
-    RETURN null;
-END;    
-$$ language plpgsql;
-
-CREATE OR REPLACE FUNCTION housenumber.refresh() RETURNS trigger AS
-  $BODY$
-  BEGIN
-    RAISE LOG 'Refresh housenumber';
-    PERFORM convert_housenumber_point();
-    DELETE FROM housenumber.updates;
-    RETURN null;
-  END;
-  $BODY$
-language plpgsql;
-
-CREATE TRIGGER trigger_flag
-    AFTER INSERT OR UPDATE OR DELETE ON osm_housenumber_point
-    FOR EACH STATEMENT
-    EXECUTE PROCEDURE housenumber.flag();
-
-CREATE CONSTRAINT TRIGGER trigger_refresh
-    AFTER INSERT ON housenumber.updates
-    INITIALLY DEFERRED
-    FOR EACH ROW
-    EXECUTE PROCEDURE housenumber.refresh();
-
--- etldoc: layer_housenumber[shape=record fillcolor=lightpink, style="rounded,filled",  
--- etldoc:     label="layer_housenumber | <z14_> z14+" ] ;
-
-CREATE OR REPLACE FUNCTION layer_housenumber(bbox geometry, zoom_level integer)
-RETURNS TABLE(osm_id bigint, geometry geometry, housenumber text) AS $$
-   -- etldoc: osm_housenumber_point -> layer_housenumber:z14_
-    SELECT osm_id, geometry, housenumber FROM osm_housenumber_point
-    WHERE zoom_level >= 14 AND geometry && bbox;
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer aerodrome_label'; END$$;DROP TRIGGER IF EXISTS trigger_flag ON osm_aerodrome_label_point;
 DROP TRIGGER IF EXISTS trigger_refresh ON aerodrome_label.updates;
