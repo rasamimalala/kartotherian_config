@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION slice_language_tags(tags hstore)
 RETURNS hstore AS $$
-    SELECT delete_empty_keys(slice(tags, ARRAY['name:ar', 'name:az', 'name:be', 'name:bg', 'name:br', 'name:bs', 'name:ca', 'name:cs', 'name:cy', 'name:da', 'name:de', 'name:el', 'name:en', 'name:eo', 'name:es', 'name:et', 'name:fi', 'name:fr', 'name:fy', 'name:ga', 'name:gd', 'name:he', 'name:hr', 'name:hu', 'name:hy', 'name:is', 'name:it', 'name:ja', 'name:ja_kana', 'name:ja_rm', 'name:ka', 'name:kk', 'name:kn', 'name:ko', 'name:ko_rm', 'name:la', 'name:lb', 'name:lt', 'name:lv', 'name:mk', 'name:mt', 'name:nl', 'name:no', 'name:pl', 'name:pt', 'name:rm', 'name:ro', 'name:ru', 'name:sk', 'name:sl', 'name:sq', 'name:sr', 'name:sr-Latn', 'name:sv', 'name:th', 'name:tr', 'name:uk', 'name:zh', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
+    SELECT delete_empty_keys(slice(tags, ARRAY['name:br', 'name:ca', 'name:co', 'name:cs', 'name:de', 'name:en', 'name:eo', 'name:es', 'name:eu', 'name:fr', 'name:it', 'name:la', 'name:nl', 'name:oc', 'name:pl', 'name:pt', 'name:ru', 'int_name', 'loc_name', 'name', 'wikidata', 'wikipedia']))
 $$ LANGUAGE SQL IMMUTABLE;
 DO $$ BEGIN RAISE NOTICE 'Layer poi'; END$$;DO $$
 BEGIN
@@ -222,7 +222,7 @@ RETURNS TEXT AS $$
         WHEN subclass IN ('attraction','viewpoint') THEN 'attraction'
         WHEN subclass IN ('biergarten','pub') THEN 'beer'
         WHEN subclass IN ('music','musical_instrument') THEN 'music'
-        WHEN subclass IN ('american_football','stadium','soccer','pitch') THEN 'stadium'
+        WHEN subclass IN ('american_football','stadium','soccer') THEN 'stadium'
         WHEN subclass IN ('art','artwork','gallery','arts_centre') THEN 'art_gallery'
         WHEN subclass IN ('bag','clothes') THEN 'clothing_store'
         WHEN subclass IN ('swimming_area','swimming') THEN 'swimming'
@@ -294,7 +294,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 -- etldoc:     label="layer_poi | <z12> z12 | <z13> z13 | <z14_> z14+" ] ;
 
 CREATE OR REPLACE FUNCTION layer_poi(bbox geometry, zoom_level integer, pixel_width numeric)
-RETURNS TABLE(osm_id bigint, global_id text, geometry geometry, name text, name_en text, name_de text, tags hstore, class text, subclass text, agg_stop integer, "rank" int) AS $$
+RETURNS TABLE(osm_id bigint, global_id text, geometry geometry, name text, name_en text, name_de text, tags hstore, class text, subclass text, agg_stop integer, layer integer, level integer, indoor integer, "rank" int) AS $$
     SELECT osm_id_hash AS osm_id, global_id,
         geometry, NULLIF(name, '') AS name,
         COALESCE(NULLIF(name_en, ''), name) AS name_en,
@@ -306,9 +306,14 @@ RETURNS TABLE(osm_id bigint, global_id text, geometry geometry, name text, name_
                 THEN NULLIF(information, '')
             WHEN subclass = 'place_of_worship'
                     THEN NULLIF(religion, '')
+            WHEN subclass = 'pitch'
+                    THEN NULLIF(sport, '')
             ELSE subclass
         END AS subclass,
         agg_stop,
+        NULLIF(layer, 0) AS layer,
+        "level",
+        CASE WHEN indoor=TRUE THEN 1 ELSE NULL END as indoor,
         row_number() OVER (
             PARTITION BY LabelGrid(geometry, 100 * pixel_width)
             ORDER BY CASE WHEN name = '' THEN 2000 ELSE poi_class_rank(poi_class(subclass, mapping_key)) END ASC
