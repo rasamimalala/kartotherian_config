@@ -123,7 +123,7 @@ run_imposm_update() {
     log "apply changes on OSM database"
     log "${CHANGE_FILE} file size is $(ls -sh ${TMP_DIR}/${CHANGE_FILE} | cut -d' ' -f 1)"
 
-    if ! imposm3 diff -config $IMPOSM_CONFIG_FILE -connection $PG_CONNECTION_STRING \
+    if ! imposm3 diff -quiet -config $IMPOSM_CONFIG_FILE -connection $PG_CONNECTION_STRING \
         -mapping ${MAPPING_PATH} \
         -cachedir ${IMPOSM_DATA_DIR}/cache/${IMPOSM_FOLDER_NAME} \
         -diffdir ${IMPOSM_DATA_DIR}/diff/${IMPOSM_FOLDER_NAME} \
