@@ -128,7 +128,7 @@ run_imposm_update() {
         -cachedir ${IMPOSM_DATA_DIR}/cache/${IMPOSM_FOLDER_NAME} \
         -diffdir ${IMPOSM_DATA_DIR}/diff/${IMPOSM_FOLDER_NAME} \
         -expiretiles-dir ${OSMOSIS_WORKING_DIR}/expiretiles/${IMPOSM_FOLDER_NAME} \
-        ${TMP_DIR}/${CHANGE_FILE} >> $LOG_FILE ; then
+        ${TMP_DIR}/${CHANGE_FILE} | tee -a $LOG_FILE ; then
             log_error "imposm3 failed"
     fi
 }
