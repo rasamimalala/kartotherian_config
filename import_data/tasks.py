@@ -1,5 +1,6 @@
 import sys
 import logging
+import os
 import os.path
 from datetime import timedelta, datetime
 from urllib.request import getproxies
@@ -20,16 +21,20 @@ class TilesLayer:
     POI = 'poi'
 
 def _execute_sql(ctx, sql, db=None, additional_options=""):
-    query = f'psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -c "{sql}" {additional_options}'
+    query = f'psql -Xq -h {ctx.pg.host} -p {ctx.pg.port} -U {ctx.pg.user} -c "{sql}" {additional_options}'
     if db is not None:
         query += f" -d {db}"
     return ctx.run(query, env={"PGPASSWORD": ctx.pg.password})
 
+
 def _db_exists(ctx, db_name):
     has_db = _execute_sql(
-        ctx, f"SELECT 1 FROM pg_database WHERE datname='{db_name}';", additional_options="-tA"
+        ctx,
+        f"SELECT 1 FROM pg_database WHERE datname='{db_name}';",
+        additional_options="-tA",
     )
     return has_db.stdout == "1\n"
+
 
 @task
 def prepare_db(ctx):
@@ -86,10 +91,14 @@ def _needs_to_download(ctx, file, url):
     existing_file_md5 = _compute_md5(ctx, file)
     logging.info(f"existing md5 = {existing_file_md5}, remote md5 = {remote_md5}")
     if not remote_md5 or remote_md5 != existing_file_md5:
-        logging.warn(f"file {file} already exists, but is not up to date, removing old file")
+        logging.warn(
+            f"file {file} already exists, but is not up to date, removing old file"
+        )
         os.remove(file)
         return True
-    logging.warn(f"file {file} already exists and is up to date, we don't need to download it again")
+    logging.warn(
+        f"file {file} already exists and is up to date, we don't need to download it again"
+    )
     return False
 
 
@@ -115,44 +124,39 @@ def get_osm_data(ctx):
     ctx.run(f"wget --progress=dot:giga {ctx.osm.url} --output-document={new_osm_file}")
 
 
-@task
-def load_basemap(ctx):
+## imposm import
+################
+
+def _run_imposm_import(ctx, mapping_filename, tileset_name):
     ctx.run(
         f'time imposm3 \
   import \
-  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.import_database}" \
+  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}:{ctx.pg.port}/{ctx.pg.import_database}" \
   -read {ctx.osm.file} \
   -diff \
-  -mapping {ctx.main_dir}/generated_mapping_base.yaml \
+  -mapping {os.path.join(ctx.imposm_config_dir, mapping_filename)} \
   -deployproduction -overwritecache \
   -optimize \
   -quiet \
-  -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.BASEMAP} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.BASEMAP}'
+  -diffdir {ctx.generated_files_dir}/diff/{tileset_name} -cachedir {ctx.generated_files_dir}/cache/{tileset_name}'
     )
 
+@task
+def load_basemap(ctx):
+    _run_imposm_import(ctx, 'generated_mapping_base.yaml', TilesLayer.BASEMAP)
 
 @task
 def load_poi(ctx):
-    ctx.run(
-        f'time imposm3 \
-  import \
-  -write --connection "postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.import_database}" \
-  -read {ctx.osm.file} \
-  -diff \
-  -mapping {ctx.main_dir}/generated_mapping_poi.yaml \
-  -deployproduction -overwritecache \
-  -optimize \
-  -quiet \
-  -diffdir {ctx.generated_files_dir}/diff/{TilesLayer.POI} -cachedir {ctx.generated_files_dir}/cache/{TilesLayer.POI}'
-    )
+    _run_imposm_import(ctx, 'generated_mapping_poi.yaml', TilesLayer.POI)
+
 
 
 def _run_sql_script(ctx, script_name):
+    script_path = os.path.join(ctx.imposm_config_dir, script_name)
     ctx.run(
-        f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.import_database} --set ON_ERROR_STOP='1' -f {ctx.sql_dir}/{script_name}",
+        f"psql -Xq -h {ctx.pg.host} -U {ctx.pg.user} -d {ctx.pg.import_database} -p {ctx.pg.port} --set ON_ERROR_STOP='1' -f {script_path}",
         env={"PGPASSWORD": ctx.pg.password},
     )
-
 
 @task
 def run_sql_script(ctx):
@@ -160,6 +164,16 @@ def run_sql_script(ctx):
     _run_sql_script(ctx, "../external_dependencies/import-sql/language.sql")
     _run_sql_script(ctx, "../external_dependencies/postgis-vt-util/postgis-vt-util.sql")
 
+
+### non-OSM data import
+#######################
+
+def _get_pg_conn(ctx):
+    return f"dbname={ctx.pg.import_database} " \
+        f"user={ctx.pg.user} " \
+        f"password={ctx.pg.password} " \
+        f"host={ctx.pg.host} " \
+        f"port={ctx.pg.port}"
 
 @task
 def import_natural_earth(ctx):
@@ -173,9 +187,7 @@ def import_natural_earth(ctx):
         && rm natural_earth_vector.sqlite.zip"
         )
 
-    pg_conn = (
-        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
-    )
+    pg_conn = _get_pg_conn(ctx)
     ctx.run(
         f'PGCLIENTENCODING=LATIN1 ogr2ogr \
     -progress \
@@ -207,7 +219,7 @@ def import_water_polygon(ctx):
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DATA_DIR={ctx.data_dir} \
   POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
-  {ctx.main_dir}/../external_dependencies/import-water/import-water.sh"
+  {ctx.imposm_config_dir}/../external_dependencies/import-water/import-water.sh"
     )
 
 
@@ -221,9 +233,7 @@ def import_lake(ctx):
             f"wget --progress=dot:giga -L -P {ctx.data_dir} https://github.com/lukasmartinelli/osm-lakelines/releases/download/v0.9/lake_centerline.geojson"
         )
 
-    pg_conn = (
-        f"dbname={ctx.pg.import_database} user={ctx.pg.user} password={ctx.pg.password} host={ctx.pg.host}"
-    )
+    pg_conn = _get_pg_conn(ctx)
     ctx.run(
         f'PGCLIENTENCODING=UTF8 ogr2ogr \
     -f Postgresql \
@@ -250,7 +260,7 @@ def import_border(ctx):
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DIR={ctx.data_dir} \
   POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
-  {ctx.main_dir}/../external_dependencies/import-osmborder/import/import_osmborder_lines.sh"
+  {ctx.imposm_config_dir}/../external_dependencies/import-osmborder/import/import_osmborder_lines.sh"
     )
 
 
@@ -264,6 +274,9 @@ def import_wikidata(ctx):
     create_table = "CREATE TABLE IF NOT EXISTS wd_names (id varchar(20) UNIQUE, page varchar(200) UNIQUE, labels hstore);"
     _execute_sql(ctx, db=ctx.pg.import_database, sql=create_table)
 
+
+### import pipeline
+###################
 
 @task
 def run_post_sql_scripts(ctx):
@@ -292,6 +305,53 @@ def load_additional_data(ctx):
     import_lake(ctx)
     import_border(ctx)
     import_wikidata(ctx)
+
+
+@task
+def kill_all_access_to_main_db(ctx):
+    """
+    close all connections to the main database
+    """
+    logging.info(f"killing all connections to the main database")
+    _execute_sql(
+        ctx,
+        f"SELECT pid, pg_terminate_backend (pid) FROM pg_stat_activity WHERE datname = '{ctx.pg.database}';",
+        db=ctx.pg.import_database,
+    )
+
+
+@task
+def rotate_database(ctx):
+    """
+    rotate the postgres database
+
+    we first move the production database to a backup database,
+    then move the newly created import database to be the new production database
+    """
+    if not _db_exists(ctx, ctx.pg.import_database):
+        return
+    kill_all_access_to_main_db(ctx)
+    if _db_exists(ctx, ctx.pg.database):
+        logging.info(
+            f"rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}"
+        )
+        _execute_sql(
+            ctx,
+            f"ALTER DATABASE {ctx.pg.database} RENAME TO {ctx.pg.backup_database};",
+            db=ctx.pg.import_database,
+        )
+    logging.info(
+        f"rotating database, moving {ctx.pg.import_database} -> {ctx.pg.database}"
+    )
+    _execute_sql(
+        ctx,
+        f"ALTER DATABASE {ctx.pg.import_database} RENAME TO {ctx.pg.database};",
+        db=ctx.pg.backup_database,
+    )
+
+
+### tiles generation
+####################
 
 
 def create_tiles_jobs(
@@ -356,49 +416,8 @@ def create_tiles_jobs(
     json_res = res.json()
     if "error" in json_res:
         # tilerator can return status 200 but an error inside the response, so we need to check it
-        raise Exception(
-            f"impossible to run tilerator job, error: {json_res['error']}"
-        )
+        raise Exception(f"impossible to run tilerator job, error: {json_res['error']}")
     logging.info(f"jobs: {res.json()}")
-
-
-@task
-def kill_all_access_to_main_db(ctx):
-    """
-    close all connections to the main database
-    """
-    logging.info(f"killing all connections to the main database")
-    _execute_sql(
-        ctx,
-        f"SELECT pid, pg_terminate_backend (pid) FROM pg_stat_activity WHERE datname = '{ctx.pg.database}';",
-        db=ctx.pg.import_database,
-    )
-
-
-@task
-def rotate_database(ctx):
-    """
-    rotate the postgres database
-    
-    we first move the production database to a backup database, 
-    then move the newly created import database to be the new production database
-    """
-    if not _db_exists(ctx, ctx.pg.import_database):
-        return
-    kill_all_access_to_main_db(ctx)
-    if _db_exists(ctx, ctx.pg.database):
-        logging.info(f"rotating database, moving {ctx.pg.database} -> {ctx.pg.backup_database}")
-        _execute_sql(
-            ctx,
-            f"ALTER DATABASE {ctx.pg.database} RENAME TO {ctx.pg.backup_database};",
-            db=ctx.pg.import_database,
-        )
-    logging.info(f"rotating database, moving {ctx.pg.import_database} -> {ctx.pg.database}")
-    _execute_sql(
-        ctx,
-        f"ALTER DATABASE {ctx.pg.import_database} RENAME TO {ctx.pg.database};",
-        db=ctx.pg.backup_database,
-    )
 
 
 @task
@@ -481,6 +500,9 @@ def generate_expired_tiles(ctx, tiles_layer, from_zoom, before_zoom, expired_til
     )
 
 
+### osm update
+##############
+
 @task
 def init_osm_update(ctx):
     """
@@ -557,7 +579,7 @@ def init_osm_update(ctx):
 @task
 def run_osm_update(ctx):
     update_env = {
-        "PG_CONNECTION_STRING": f"postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}/{ctx.pg.database}",
+        "PG_CONNECTION_STRING": f"postgis://{ctx.pg.user}:{ctx.pg.password}@{ctx.pg.host}:{ctx.pg.port}/{ctx.pg.database}",
         "OSMOSIS_WORKING_DIR": ctx.update_tiles_dir,
         "IMPOSM_DATA_DIR": ctx.generated_files_dir,
     }
@@ -575,10 +597,13 @@ def run_osm_update(ctx):
         update_env["JAVACMD_OPTIONS"] = java_cmd_options
 
     ctx.run(
-        f"{ctx.main_dir}/config/import_data/osm_update.sh --config {ctx.main_dir}/config/imposm",
+        f"{os.path.join(os.getcwd(), 'osm_update.sh')} --config {ctx.imposm_config_dir}",
         env=update_env,
     )
 
+
+### default task
+################
 
 @task(default=True)
 def load_all(ctx):
