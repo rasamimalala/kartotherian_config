@@ -18,6 +18,9 @@ or to use an already downloaded file:
 
 `INVOKE_OSM_FILE=path_to_an_osm_file pipenv run invoke`
 
+Generated data will be stored in a `/data` folder so you should make sure this
+folder exists and is writable prior to running the import.
+
 Note:
 the osm file can also be put in a `invoke.yaml` file.
 
@@ -29,3 +32,5 @@ eg.
 `INVOKE_OSM_FILE=path_to_an_osm_file pipenv run invoke load-poi`
 
 Note: be careful to replace `_` with `-` in the function name
+
+Note: the `pipenv` command should be ran from the `import_data` folder.

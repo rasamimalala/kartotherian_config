@@ -157,8 +157,8 @@ def _run_sql_script(ctx, script_name):
 @task
 def run_sql_script(ctx):
     # load several psql functions
-    _run_sql_script(ctx, "language.sql")
-    _run_sql_script(ctx, "postgis-vt-util.sql")
+    _run_sql_script(ctx, "../external_dependencies/import-sql/language.sql")
+    _run_sql_script(ctx, "../external_dependencies/postgis-vt-util/postgis-vt-util.sql")
 
 
 @task
@@ -207,7 +207,7 @@ def import_water_polygon(ctx):
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DATA_DIR={ctx.data_dir} \
   POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
-  {ctx.main_dir}/import-water.sh"
+  {ctx.main_dir}/../external_dependencies/import-water/import-water.sh"
     )
 
 
@@ -250,7 +250,7 @@ def import_border(ctx):
     ctx.run(
         f"POSTGRES_PASSWORD={ctx.pg.password} POSTGRES_PORT={ctx.pg.port} IMPORT_DIR={ctx.data_dir} \
   POSTGRES_HOST={ctx.pg.host} POSTGRES_DB={ctx.pg.import_database} POSTGRES_USER={ctx.pg.user} \
-  {ctx.main_dir}/import_osmborder_lines.sh"
+  {ctx.main_dir}/../external_dependencies/import-osmborder/import/import_osmborder_lines.sh"
     )
 
 
