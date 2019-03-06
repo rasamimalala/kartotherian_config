@@ -12,9 +12,9 @@ gen-lite:
       host: 'localhost'
       type: postgis
     set:
-      host: {var: osmdb-host}
-      user: {var: osmdb-user}
-      password: {var: osmdb-pswd}
+      host: {env: TILERATOR_OSMDB_HOST}
+      user: {env: TILERATOR_OSMDB_USER}
+      password: {env: TILERATOR_OSMDB_PSWD}
 
 ozgen-lite:
   public: true
@@ -30,9 +30,9 @@ v2-lite:
   params:
     maxzoom: 15
     keyspace: v2lite
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: TILERATOR_CASSANDRA_SERVERS}
+    username: {env: TILERATOR_CASSANDRA_USER}
+    password: {env: TILERATOR_CASSANDRA_PSWD}
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
@@ -58,9 +58,9 @@ gen_basemap:
       host: 'localhost'
       type: postgis
     set:
-      host: {var: osmdb-host}
-      user: {var: osmdb-user}
-      password: {var: osmdb-pswd}
+      host: {env: TILERATOR_OSMDB_HOST}
+      user: {env: TILERATOR_OSMDB_USER}
+      password: {env: TILERATOR_OSMDB_PSWD}
 
 basemap:
   public: true
@@ -69,9 +69,9 @@ basemap:
   params:
     maxzoom: 15
     keyspace: basemap
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: TILERATOR_CASSANDRA_SERVERS}
+    username: {env: TILERATOR_CASSANDRA_USER}
+    password: {env: TILERATOR_CASSANDRA_PSWD}
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
@@ -99,9 +99,9 @@ gen_poi:
       host: 'localhost'
       type: postgis
     set:
-      host: {var: osmdb-host}
-      user: {var: osmdb-user}
-      password: {var: osmdb-pswd}
+      host: {env: TILERATOR_OSMDB_HOST}
+      user: {env: TILERATOR_OSMDB_USER}
+      password: {env: TILERATOR_OSMDB_PSWD}
 
 poi:
   public: true
@@ -111,9 +111,9 @@ poi:
     maxzoom: 15
     minzoom: 10
     keyspace: poi
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: TILERATOR_CASSANDRA_SERVERS}
+    username: {env: TILERATOR_CASSANDRA_USER}
+    password: {env: TILERATOR_CASSANDRA_PSWD}
     repfactor: 4
     durablewrite: 0
     createIfMissing: true
