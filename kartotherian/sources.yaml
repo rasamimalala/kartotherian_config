@@ -5,9 +5,9 @@ v2-lite:
   params:
     maxzoom: 14 # Note: this max zoom is inclusive
     keyspace: v2lite
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: KARTOTHERIAN_CASSANDRA_SERVERS}
+    username: {env: KARTOTHERIAN_CASSANDRA_USER}
+    password: {env: KARTOTHERIAN_CASSANDRA_PSWD}
     createIfMissing: false
     setLastModified: true
 
@@ -28,9 +28,9 @@ basemap:
   params:
     maxzoom: 14 # Note: this max zoom is inclusive
     keyspace: basemap
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: KARTOTHERIAN_CASSANDRA_SERVERS}
+    username: {env: KARTOTHERIAN_CASSANDRA_USER}
+    password: {env: KARTOTHERIAN_CASSANDRA_PSWD}
     createIfMissing: false
     setLastModified: true
 
@@ -52,9 +52,9 @@ poi:
     maxzoom: 14 # Note: this max zoom is inclusive
     minzoom: 10 # Note: this max zoom is inclusive
     keyspace: poi
-    cp: {var: cassandra-servers}
-    username: {var: cassandra-user}
-    password: {var: cassandra-pswd}
+    cp: {env: KARTOTHERIAN_CASSANDRA_SERVERS}
+    username: {env: KARTOTHERIAN_CASSANDRA_USER}
+    password: {env: KARTOTHERIAN_CASSANDRA_PSWD}
     createIfMissing: false
     setLastModified: true
 
