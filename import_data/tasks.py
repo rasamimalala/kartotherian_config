@@ -536,7 +536,7 @@ def init_osm_update(ctx):
         resp = session.get(url)
         resp.raise_for_status()
         # state file may contain escaped ':' in the timestamp
-        state_string = resp.text.replace('\:',':')
+        state_string = resp.text.replace('\\:',':')
         c = configparser.ConfigParser()
         c.read_string('[root]\n'+state_string)
         return OsmState(**c['root'])

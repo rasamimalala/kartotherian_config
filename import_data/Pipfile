@@ -4,12 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [dev-packages]
+pytest = "*"
+responses = "*"
 
 [packages]
 invoke = "*"
 requests = ">=2.20.0"
 configparser = "*"
 pydantic = "*"
+pyyaml = "*"
 
 [requires]
 python_version = "3.6"
