@@ -209,9 +209,15 @@ def import_water_polygon(ctx):
     logging.info("importing water polygon shapes in postgres")
 
     target_file = f"{ctx.data_dir}/water_polygons.shp"
-    if not os.path.isfile(target_file):
+    to_download = True
+    if os.path.isfile(target_file):
+        existing_file_dt = datetime.utcfromtimestamp(os.path.getmtime(target_file))
+        if datetime.utcnow() - existing_file_dt < timedelta(days=30):
+            to_download = False
+
+    if to_download:
         ctx.run(
-            f"wget --progress=dot:giga http://data.openstreetmapdata.com/water-polygons-split-3857.zip \
+            f"wget --progress=dot:giga {ctx.water.polygons_url} \
     && unzip -oj water-polygons-split-3857.zip -d {ctx.data_dir} \
     && rm water-polygons-split-3857.zip"
         )
