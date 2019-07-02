@@ -13,6 +13,12 @@ generated_files_dir: /data/imposm
 data_dir: /data
 update_tiles_dir: /data/update_tiles_data
 
+################################################
+# Data sources
+
+water:
+  polygons_url: https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip
+
 osm:
   ## one of those value needs to be configured
   ## URL where to get the osm file
@@ -20,7 +26,10 @@ osm:
   ## Path of the file
   file:
 
-## Section to configure the tiles generation
+
+################################################
+# Tiles generation
+
 ## if neither 'x'/'y' nor 'planet' is defined, no tiles are generated
 tiles:
   ## boolean to tell that we want to generate tiles on the whole planet
